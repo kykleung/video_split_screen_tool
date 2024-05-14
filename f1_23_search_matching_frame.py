@@ -110,12 +110,8 @@ def gaussian_blur_and_histogram_equalization(image):
 
 def find_most_similar_frame(reference_frame, target_video_path, scale_factor, duration_limit):
     
-    # Display the concatenated image
     reference_frame = gaussian_blur_and_histogram_equalization(crop_from_top_percentage(reference_frame, 20, 65))
-    cv2.imshow("reference frame", reference_frame)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
+ 
     target_cap = cv2.VideoCapture(target_video_path)
     fps = target_cap.get(cv2.CAP_PROP_FPS)  # Frames per second
     max_frame_number = int(fps * duration_limit)
@@ -134,14 +130,17 @@ def find_most_similar_frame(reference_frame, target_video_path, scale_factor, du
         # Compute the absolute difference
         diff = cv2.absdiff(reference_frame, cropped_scaled_frame)
         score = np.sum(diff)
-        print(f"{frame_count}: {score}") 
 
         if score < best_score:
             best_score, best_frame_number = score, frame_count
             best_frame_image = frame  # Store the current frame as it's the best match so far
+            cv2.imshow("Similar Frame Search", cv2.hconcat([reference_frame, cropped_scaled_frame]))
+            cv2.waitKey(1)
+
         frame_count += 1
     
     target_cap.release()
+    cv2.destroyWindow("Similar Frame Search")
     return best_frame_number, best_frame_image
 
 
