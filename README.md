@@ -18,9 +18,14 @@ Click on the image to add a similar-coloured blob to the mask. Hit q to finish a
 
 # Worfklow
 
-## f1\_23\_search\_start\_frame.py
+## f1\_23\_search\_start\_frame.py (deprecated)
 Loads a video file and finds the frame most similar to the masked portion of the `reference_image.jpg` image. Run with `-h` option for further details. The output is the time (and frame number) of the most similar frame. This frame will also be displayed. Run this script of the two videos that will be combined together as a split-screen video.
 
+## f1\_23\_search\_matching\_frame.py
+Loads two videos and finds the earliest mutually matching frames. Optionally set duration and the starting time of both videos.
+
+###Usage
+`f1_23_search_matching_frame.py [-h] [--duration DURATION] [--video1_start VIDEO1_START] [--video2_start VIDEO2_START] video1_path video2_path`
 
 ## f1\_23\_create\_split\_screen\_video.py
 Process and combine two videos side by side to achieve a standard 1080p resolution output video.
