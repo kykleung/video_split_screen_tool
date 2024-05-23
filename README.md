@@ -21,6 +21,7 @@ Click on the image to add a similar-coloured blob to the mask. Hit q to finish a
 ## f1\_23\_search\_start\_frame.py 
 Loads a video file and finds the frame most similar to the masked portion of the `reference_image.jpg` image. Run with `-h` option for further details. The output is the time (and frame number) of the most similar frame. This frame will also be displayed. Run this script of the two videos that will be combined together as a split-screen video. Useful for aligning race starts where cars start in different positions
 
+
 ## f1\_23\_search\_matching\_frame.py
 Loads two videos and finds the earliest mutually matching frames. Optionally set duration and the starting time of both videos.
 

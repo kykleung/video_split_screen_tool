@@ -221,6 +221,7 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=float, default=10.0, help="Maximum duration (in seconds) to search for a match from the start of the second video.")
     parser.add_argument("--video1_start", type=float, default=0, help="Video 1 start time (in seconds). Frames before this time are ignored.")
     parser.add_argument("--video2_start", type=float, default=0, help="Video 2 start time (in seconds). Frames before this time are ignored.")
+
     args = parser.parse_args()
 
     main(args.video1_path, args.video2_path, args.duration, args.video1_start, args.video2_start)
