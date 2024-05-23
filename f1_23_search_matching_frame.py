@@ -180,19 +180,20 @@ def main(video1_path, video2_path, duration, video1_start_time, video2_start_tim
     cropped_first_frame_video1 = scaled_first_frame_video1[:int(scaled_first_frame_video1.shape[0] * 0.6), :, :]
     frame_number_video1 = video1_start_frame_num 
     best_frame_video1 = first_frame_video1
+    print(f"Video 1 reference: {frame_number_video1} ({frame_number_video1 / fps_video1}s)")
 
     # Step 1: Find similar frame in video 2
     frame_number_video2, best_frame_video2 = find_most_similar_frame(scaled_first_frame_video1, video2_path, scale_factor2, duration, video2_start_frame_num)
-    print(f"Step 1: Similar frame in video 2 found at frame number: {frame_number_video2}")
+    print(f"Step 1: Similar frame in video 2 found at frame number: {frame_number_video2} ({frame_number_video2 / fps_video2}s)")
 
     # Step 2: Use the found frame in video 2 to perform a reverse search in video 1
     scaled_frame_video2 = scale_frame(best_frame_video2, scale_factor2)
     frame_number_video1, reverse_search_best_frame_video1 = find_most_similar_frame(scaled_frame_video2, video1_path, scale_factor1, duration, video1_start_frame_num)
-    print(f"Step 2: Reverse search frame in video 1 found at frame number: {frame_number_video1}")
+    print(f"Step 2: Reverse search frame in video 1 found at frame number: {frame_number_video1} ({frame_number_video1 / fps_video1}s)")
 
     # Step 3: If reverse search does not return to the
     # Check if the reverse search returns to the first frame of video 1
-    if frame_number_video1 == video1_start_frame_num:
+    if abs(frame_number_video1 - video1_start_frame_num) <= 1:
         print("Reverse search successfully returned to the first frame of video 1. The match is confirmed.")
     else:
         print("Reverse search did not return to the first frame of video 1. Performing another reverse search in video 2.")
@@ -201,8 +202,8 @@ def main(video1_path, video2_path, duration, video1_start_time, video2_start_tim
         scaled_frame_video1 = scale_frame(best_frame_video1, scale_factor1)
         prev_frame_number_video2 = frame_number_video2
         frame_number_video2, best_frame_video2 = find_most_similar_frame(scaled_frame_video1, video2_path, scale_factor2, duration, video2_start_frame_num)
-        print(f"Step 3: Third search in video 2 found a similar frame at frame number: {frame_number_video2}")
-        if frame_number_video2 == prev_frame_number_video2:
+        print(f"Step 3: Third search in video 2 found a similar frame at frame number: {frame_number_video2} ({frame_number_video2 / fps_video2}s)")
+        if abs(frame_number_video2 - prev_frame_number_video2) <= 1:
             print("The third search confirmed the frame found in the first search.")
         else:
             print("The third search found a different frame. No matching frames found.")
@@ -210,6 +211,7 @@ def main(video1_path, video2_path, duration, video1_start_time, video2_start_tim
     
     print(f"Matching Frame Video 1: {frame_number_video1}, Time: {frame_number_video1/fps_video1:.6f} seconds")
     print(f"Matching Frame Video 2: {frame_number_video2}, Time: {frame_number_video2/fps_video2:.6f} seconds")
+    print(f"Time Difference: {frame_number_video1/fps_video1 - frame_number_video2/fps_video2:.6f} seconds")
     display_matching_images(scale_frame(best_frame_video1, scale_factor1), scale_frame(best_frame_video2, scale_factor2))
 
 if __name__ == "__main__":
@@ -218,7 +220,8 @@ if __name__ == "__main__":
     parser.add_argument("video2_path", type=str, help="Path to the second video file.")
     parser.add_argument("--duration", type=float, default=10.0, help="Maximum duration (in seconds) to search for a match from the start of the second video.")
     parser.add_argument("--video1_start", type=float, default=0, help="Video 1 start time (in seconds). Frames before this time are ignored.")
-    parser.add_argument("--video2_start", type=float, default=0, help="Video 1 start time (in seconds). Frames before this time are ignored.")
+    parser.add_argument("--video2_start", type=float, default=0, help="Video 2 start time (in seconds). Frames before this time are ignored.")
+
     args = parser.parse_args()
 
     main(args.video1_path, args.video2_path, args.duration, args.video1_start, args.video2_start)
