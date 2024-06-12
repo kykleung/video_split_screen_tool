@@ -9,7 +9,7 @@ Run `pip install -r requirements.txt`
 
 # One-Time Tools
 
-## f1\_23\_find\_mask\_frame.py
+## f1\_23\_search\_frame.py
 Use  this to load a video and step through each frame to select and save a frame to be used for mask creation. This frame can also be used as the reference image for finding a similar frame from a video. This image file (`reference_image.jpg`) is also already included in the repo. 
 
 ## f1\_23\_create\_mask\_image.py
