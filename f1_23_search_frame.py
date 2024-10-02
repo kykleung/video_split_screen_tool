@@ -19,27 +19,30 @@ class VideoFrameExtractor(tk.Tk):
         self.canvas = tk.Canvas(self)
         self.canvas.pack()
 
-        btn_load_video = tk.Button(self, text="Load Video", command=self.load_video)
+        control_frame = tk.Frame(self)
+        control_frame.pack(side=tk.TOP, fill=tk.X)
+
+        btn_load_video = tk.Button(control_frame, text="Load Video", command=self.load_video)
         btn_load_video.pack(side=tk.LEFT)
 
-        btn_prev_frame = tk.Button(self, text="<< Prev Frame", command=self.prev_frame)
+        btn_prev_frame = tk.Button(control_frame, text="<< Prev Frame", command=self.prev_frame)
         btn_prev_frame.pack(side=tk.LEFT)
 
-        btn_next_frame = tk.Button(self, text="Next Frame >>", command=self.next_frame)
+        btn_next_frame = tk.Button(control_frame, text="Next Frame >>", command=self.next_frame)
         btn_next_frame.pack(side=tk.LEFT)
 
-        self.jump_entry = tk.Entry(self)
+        self.jump_entry = tk.Entry(control_frame)
         self.jump_entry.pack(side=tk.LEFT)
 
-        btn_jump_frame = tk.Button(self, text="Jump to Frame/Time", command=self.jump_to_frame)
+        btn_jump_frame = tk.Button(control_frame, text="Jump to Frame/Time", command=self.jump_to_frame)
         btn_jump_frame.pack(side=tk.LEFT)
 
-        btn_save_frame = tk.Button(self, text="Save Frame", command=self.save_frame)
+        btn_save_frame = tk.Button(control_frame, text="Save Frame", command=self.save_frame)
         btn_save_frame.pack(side=tk.RIGHT)
 
         # Label to display the current frame and time
         self.status_label = Label(self, text="Frame: 0 Time: 0s")
-        self.status_label.pack(side=tk.BOTTOM)
+        self.status_label.pack(side=tk.BOTTOM, fill=tk.X, anchor=tk.CENTER)
 
     def update_status(self):
         if self.vid_cap is not None:
@@ -111,7 +114,7 @@ class VideoFrameExtractor(tk.Tk):
 
     def save_frame(self):
         if self.current_image is not None:
-            image = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2RGB)
+            image = cv2.cvtcolor(self.current_image, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(image)
             file_path = filedialog.asksaveasfilename(defaultextension=".jpg")
             if file_path:
