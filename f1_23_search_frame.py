@@ -31,11 +31,12 @@ class VideoFrameExtractor(tk.Tk):
         btn_next_frame = tk.Button(control_frame, text="Next Frame >>", command=self.next_frame)
         btn_next_frame.pack(side=tk.LEFT)
 
-        self.jump_entry = tk.Entry(control_frame)
-        self.jump_entry.pack(side=tk.LEFT)
+        jump_label = tk.Label(control_frame, text="Jump to frame/time:")
+        jump_label.pack(side=tk.LEFT)
 
-        btn_jump_frame = tk.Button(control_frame, text="Jump to Frame/Time", command=self.jump_to_frame)
-        btn_jump_frame.pack(side=tk.LEFT)
+        self.jump_entry = tk.Entry(control_frame)
+        self.jump_entry.bind("<Return>", self.jump_to_frame)
+        self.jump_entry.pack(side=tk.LEFT)
 
         btn_save_frame = tk.Button(control_frame, text="Save Frame", command=self.save_frame)
         btn_save_frame.pack(side=tk.RIGHT)
@@ -91,7 +92,7 @@ class VideoFrameExtractor(tk.Tk):
             self.current_frame -= 1
             self.show_frame()
 
-    def jump_to_frame(self):
+    def jump_to_frame(self, event=None):
         input_value = self.jump_entry.get()
         if self.vid_cap is not None and input_value:
             try:
@@ -114,7 +115,7 @@ class VideoFrameExtractor(tk.Tk):
 
     def save_frame(self):
         if self.current_image is not None:
-            image = cv2.cvtcolor(self.current_image, cv2.COLOR_BGR2RGB)
+            image = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(image)
             file_path = filedialog.asksaveasfilename(defaultextension=".jpg")
             if file_path:
