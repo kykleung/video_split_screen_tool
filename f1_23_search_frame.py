@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, simpledialog, messagebox, Label
+from tkinter import filedialog, messagebox, Label
 
 import cv2
 from PIL import Image, ImageTk
@@ -28,7 +28,10 @@ class VideoFrameExtractor(tk.Tk):
         btn_next_frame = tk.Button(self, text="Next Frame >>", command=self.next_frame)
         btn_next_frame.pack(side=tk.LEFT)
 
-        btn_jump_frame = tk.Button(self, text="Jump to Frame", command=self.jump_to_frame)
+        self.jump_entry = tk.Entry(self)
+        self.jump_entry.pack(side=tk.LEFT)
+
+        btn_jump_frame = tk.Button(self, text="Jump to Frame/Time", command=self.jump_to_frame)
         btn_jump_frame.pack(side=tk.LEFT)
 
         btn_save_frame = tk.Button(self, text="Save Frame", command=self.save_frame)
@@ -86,12 +89,25 @@ class VideoFrameExtractor(tk.Tk):
             self.show_frame()
 
     def jump_to_frame(self):
-        frame_number = simpledialog.askinteger("Jump to Frame", "Enter frame number:", parent=self)
-        if frame_number is not None and 0 <= frame_number < self.total_frames:
-            self.current_frame = frame_number
-            self.show_frame()
-        else:
-            tk.messagebox.showerror("Error", "Invalid frame number.")
+        input_value = self.jump_entry.get()
+        if self.vid_cap is not None and input_value:
+            try:
+                if ':' in input_value:
+                    # Input is time in format HH:MM:SS
+                    time_parts = list(map(int, input_value.split(':')))
+                    time_in_seconds = sum(x * 60 ** i for i, x in enumerate(reversed(time_parts)))
+                    frame_number = int(time_in_seconds * self.fps)
+                else:
+                    # Input is frame number
+                    frame_number = int(input_value)
+
+                if 0 <= frame_number < self.total_frames:
+                    self.current_frame = frame_number
+                    self.show_frame()
+                else:
+                    raise ValueError("Invalid frame number.")
+            except ValueError as e:
+                messagebox.showerror("Error", f"Invalid input: {e}")
 
     def save_frame(self):
         if self.current_image is not None:
@@ -104,4 +120,3 @@ class VideoFrameExtractor(tk.Tk):
 if __name__ == "__main__":
     app = VideoFrameExtractor()
     app.mainloop()
-
