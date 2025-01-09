@@ -1,18 +1,20 @@
 import argparse
-from moviepy.editor import VideoFileClip, clips_array
+from moviepy import VideoFileClip
+from moviepy.video.compositing.CompositeVideoClip import clips_array
+from moviepy import vfx
 import multiprocessing
 
 def process_and_combine_videos(left_video_path, left_start_time, right_video_path, right_start_time, output_length=None, output_path="combined_video.mp4"):
     # Load the video files and set start times
-    left_clip = VideoFileClip(left_video_path).subclip(left_start_time)
-    right_clip = VideoFileClip(right_video_path).subclip(right_start_time)
+    left_clip = VideoFileClip(left_video_path).subclipped(left_start_time)
+    right_clip = VideoFileClip(right_video_path).subclipped(right_start_time)
     
     # Cropping 25% from both sides of each video
     crop_width_left = left_clip.size[0] * 0.25 * 0.5
-    left_clip_cropped = left_clip.crop(x1=crop_width_left, x2=left_clip.size[0] - crop_width_left)
+    left_clip_cropped = left_clip.cropped(x1=crop_width_left, x2=left_clip.size[0] - crop_width_left)
     
     crop_width_right = right_clip.size[0] * 0.25 * 0.5
-    right_clip_cropped = right_clip.crop(x1=crop_width_right, x2=right_clip.size[0] - crop_width_right)
+    right_clip_cropped = right_clip.cropped(x1=crop_width_right, x2=right_clip.size[0] - crop_width_right)
 
     # After cropping, resize the videos to have a combined width of 1920px while maintaining aspect ratio
     # Calculate target height based on the aspect ratio of the cropped clips
@@ -24,8 +26,8 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
     final_height = max(target_height_left, target_height_right)
     
     # Resizing clips to have the same height
-    left_clip_final = left_clip_cropped.resize(height=final_height)
-    right_clip_final = right_clip_cropped.resize(height=final_height)
+    left_clip_final = left_clip_cropped.resized(height=final_height)
+    right_clip_final = right_clip_cropped.resized(height=final_height)
 
     # Calculate the padding needed to reach a height of 1080
     total_padding = 1080 - final_height
@@ -33,8 +35,9 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
     bottom_padding = total_padding - top_padding
     
     # Add padding to the top and bottom of each clip
-    left_clip_final = left_clip_final.margin(top=top_padding, bottom=bottom_padding, color=(0,0,0))
-    right_clip_final = right_clip_final.margin(top=top_padding, bottom=bottom_padding, color=(0,0,0))
+    left_clip_final = left_clip_final.with_effects([vfx.Margin(top=top_padding, bottom=bottom_padding, color=(0,0,0))])
+    right_clip_final = right_clip_final.with_effects([vfx.Margin(top=top_padding, bottom=bottom_padding, color=(0,0,0))])
+
 
     # Combine the padded clips side by side
     combined_clip = clips_array([[left_clip_final, right_clip_final]], bg_color=(0, 0, 0))
@@ -51,7 +54,7 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
         final_duration = output_length
     
     # Trim the combined clip to match the duration of the shorter input clip
-    final_clip = combined_clip.subclip(0, final_duration)
+    final_clip = combined_clip.subclipped(0, final_duration)
     
     # Write the output file
     final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", threads=multiprocessing.cpu_count())
