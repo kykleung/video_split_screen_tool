@@ -1,11 +1,11 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, Label
-
+from tkinter import messagebox, Label
 import cv2
 from PIL import Image, ImageTk
+import sys
 
 class VideoFrameExtractor(tk.Tk):
-    def __init__(self):
+    def __init__(self, file_path):
         super().__init__()
         self.title("Frame Extractor")
 
@@ -21,9 +21,6 @@ class VideoFrameExtractor(tk.Tk):
 
         control_frame = tk.Frame(self)
         control_frame.pack(side=tk.TOP, fill=tk.X)
-
-        btn_load_video = tk.Button(control_frame, text="Load Video", command=self.load_video)
-        btn_load_video.pack(side=tk.LEFT)
 
         btn_prev_frame = tk.Button(control_frame, text="<< Prev Frame", command=self.prev_frame)
         btn_prev_frame.pack(side=tk.LEFT)
@@ -47,27 +44,33 @@ class VideoFrameExtractor(tk.Tk):
 
         self.bind("<Configure>", self.on_resize)
 
+        # Load video from the given file path
+        self.load_video(file_path)
+
     def update_status(self):
         if self.vid_cap is not None:
             time = self.current_frame / self.fps
             self.status_label.config(text=f"Frame: {self.current_frame} Time: {time:.6f}s")
 
-    def load_video(self):
-        file_path = filedialog.askopenfilename()
-        if file_path:
-            self.vid_cap = cv2.VideoCapture(file_path)
-            self.total_frames = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
-            self.current_frame = 0
+    def load_video(self, file_path):
+        self.vid_cap = cv2.VideoCapture(file_path)
+        if not self.vid_cap.isOpened():
+            messagebox.showerror("Error", f"Cannot open video file: {file_path}")
+            self.destroy()
+            return
 
-            # Set the width to 1280 pixels and calculate the height to maintain 16:9 aspect ratio
-            self.width = 960
-            self.height = int(self.width * 9 / 16)
+        self.total_frames = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
+        self.current_frame = 0
 
-            self.geometry(f"{self.width}x{self.height+100}")
-            self.canvas.config(width=self.width, height=self.height)
+        # Set the width to 1280 pixels and calculate the height to maintain 16:9 aspect ratio
+        self.width = 960
+        self.height = int(self.width * 9 / 16)
 
-            self.show_frame()
+        self.geometry(f"{self.width}x{self.height+100}")
+        self.canvas.config(width=self.width, height=self.height)
+
+        self.show_frame()
 
     def show_frame(self):
         if self.vid_cap is not None:
@@ -141,5 +144,11 @@ class VideoFrameExtractor(tk.Tk):
             self.show_frame()
 
 if __name__ == "__main__":
-    app = VideoFrameExtractor()
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <video_file_path>")
+        sys.exit(1)
+
+    video_file_path = sys.argv[1]
+    app = VideoFrameExtractor(video_file_path)
     app.mainloop()
+
