@@ -49,8 +49,19 @@ class VideoFrameExtractor(tk.Tk):
 
     def update_status(self):
         if self.vid_cap is not None:
-            time = self.current_frame / self.fps
-            self.status_label.config(text=f"Frame: {self.current_frame} Time: {time:.6f}s")
+            time_in_seconds = self.current_frame / self.fps
+            hours = int(time_in_seconds // 3600)
+            minutes = int((time_in_seconds % 3600) // 60)
+            seconds = time_in_seconds % 60
+
+            if hours > 0:
+                time_str = f"{hours:02}:{minutes:02}:{seconds:06.4f}"
+            else:
+                time_str = f"{minutes:02}:{seconds:06.4f}"
+
+            self.status_label.config(text=f"Frame: {self.current_frame} Time: {time_str} ({time_in_seconds:06.4f}s)")
+            self.jump_entry.delete(0, tk.END)
+            self.jump_entry.insert(0, time_str)
 
     def load_video(self, file_path):
         self.vid_cap = cv2.VideoCapture(file_path)
@@ -104,9 +115,17 @@ class VideoFrameExtractor(tk.Tk):
         if self.vid_cap is not None and input_value:
             try:
                 if ':' in input_value:
-                    # Input is time in format HH:MM:SS
-                    time_parts = list(map(int, input_value.split(':')))
-                    time_in_seconds = sum(x * 60 ** i for i, x in enumerate(reversed(time_parts)))
+                    # Input is time in format HH:MM:SS or MM:SS
+                    time_parts = input_value.split(':')
+                    if len(time_parts) == 3:
+                        hours, minutes, seconds = map(float, time_parts)
+                    elif len(time_parts) == 2:
+                        hours = 0
+                        minutes, seconds = map(float, time_parts)
+                    else:
+                        raise ValueError("Invalid time format.")
+
+                    time_in_seconds = hours * 3600 + minutes * 60 + seconds
                     frame_number = int(time_in_seconds * self.fps)
                 else:
                     # Input is frame number
@@ -124,7 +143,7 @@ class VideoFrameExtractor(tk.Tk):
         if self.current_image is not None:
             image = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(image)
-            file_path = filedialog.asksaveasfilename(defaultextension=".jpg")
+            file_path = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=[("JPEG files", "*.jpg"), ("All files", "*.*")])
             if file_path:
                 image.save(file_path)
 
