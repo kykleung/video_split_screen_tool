@@ -64,8 +64,8 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
     final_clip = combined_clip.subclipped(0, final_duration)
     
     # Write the output file
-    final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", threads=multiprocessing.cpu_count())
-
+    #final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", threads=multiprocessing.cpu_count())
+    final_clip.write_videofile(output_path, codec="h264_videotoolbox", audio_codec="aac", threads=multiprocessing.cpu_count())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process and combine two videos side by side to achieve a standard 1080p resolution output video.")
