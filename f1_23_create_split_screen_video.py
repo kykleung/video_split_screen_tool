@@ -43,15 +43,22 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
     combined_clip = clips_array([[left_clip_final, right_clip_final]], bg_color=(0, 0, 0))
     
     # Find the duration of each original clip after applying start time offset
-    left_duration = left_clip.duration - left_start_time
-    right_duration = right_clip.duration - right_start_time
+    # left_duration = left_clip.duration - left_start_time
+    # right_duration = right_clip.duration - right_start_time
+
+    # Print the durations for debugging
+    print(f"Original left video duration: {left_clip.duration} seconds")
+    print(f"Original right video duration: {right_clip.duration} seconds")
     
     # Determine the duration of the shorter clip
-    final_duration = min(left_duration, right_duration)
+    final_duration = min(left_clip.duration, right_clip.duration)
 
     # If output_length is specified and valid, use it as the final duration
     if output_length is not None and 0 < output_length < final_duration:
         final_duration = output_length
+
+    # Print the final duration for debugging
+    print(f"Final duration of the combined video: {final_duration} seconds")
     
     # Trim the combined clip to match the duration of the shorter input clip
     final_clip = combined_clip.subclipped(0, final_duration)
