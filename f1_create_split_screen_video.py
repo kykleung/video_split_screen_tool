@@ -3,11 +3,9 @@ import subprocess
 import time
 
 def process_and_combine_videos(left_video_path, left_start_time, right_video_path, right_start_time, output_length=None, output_path="combined_video.mp4"):
-    # Temporary file paths for intermediate processing
     left_temp = "left_temp.mp4"
     right_temp = "right_temp.mp4"
 
-    # Get the duration of the input videos
     def get_video_duration(video_path):
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_path],
@@ -15,36 +13,37 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
         )
         return float(result.stdout.strip())
 
-    left_duration = get_video_duration(left_video_path) - left_start_time
-    right_duration = get_video_duration(right_video_path) - right_start_time
+    left_available_duration = get_video_duration(left_video_path) - left_start_time
+    right_available_duration = get_video_duration(right_video_path) - right_start_time
 
-    # Determine the processing length for each video
-    left_length = min(output_length, left_duration) if output_length else left_duration
-    right_length = min(output_length, right_duration) if output_length else right_duration
+    # Only process up to the shortest available duration (or output_length if specified)
+    final_duration = min(left_available_duration, right_available_duration)
+    if output_length is not None:
+        final_duration = min(final_duration, output_length)
 
-    # Crop, resize, and pad the left video
+    # Process left video
     start_time = time.time()
     left_crop_resize_cmd = [
         "ffmpeg", "-i", left_video_path, "-ss", str(left_start_time),
         "-vf", "crop=in_w*0.75:in_h,scale=960:-1,pad=960:1080:(ow-iw)/2:(oh-ih)/2:black",
-        "-t", str(left_length) if output_length else "99999", "-c:v", "libx264", "-crf", "18", "-preset", "slow",
+        "-t", str(final_duration), "-c:v", "libx264", "-crf", "18", "-preset", "slow",
         "-threads", "0", left_temp
     ]
     subprocess.run(left_crop_resize_cmd, check=True)
     left_processing_time = time.time() - start_time
 
-    # Crop, resize, and pad the right video
+    # Process right video
     start_time = time.time()
     right_crop_resize_cmd = [
         "ffmpeg", "-i", right_video_path, "-ss", str(right_start_time),
         "-vf", "crop=in_w*0.75:in_h,scale=960:-1,pad=960:1080:(ow-iw)/2:(oh-ih)/2:black",
-        "-t", str(right_length) if output_length else "99999", "-c:v", "libx264", "-crf", "18", "-preset", "slow",
+        "-t", str(final_duration), "-c:v", "libx264", "-crf", "18", "-preset", "slow",
         "-threads", "0", right_temp
     ]
     subprocess.run(right_crop_resize_cmd, check=True)
     right_processing_time = time.time() - start_time
 
-    # Combine the two videos side by side
+    # Combine videos
     start_time = time.time()
     combine_cmd = [
         "ffmpeg", "-i", left_temp, "-i", right_temp,
@@ -55,20 +54,15 @@ def process_and_combine_videos(left_video_path, left_start_time, right_video_pat
     subprocess.run(combine_cmd, check=True)
     combine_processing_time = time.time() - start_time
 
-    # Clean up temporary files
     subprocess.run(["rm", left_temp, right_temp])
 
-    # Report processing times
     print("\nProcessing Times:")
     print(f"Left video processing time: {left_processing_time:.2f} seconds")
     print(f"Right video processing time: {right_processing_time:.2f} seconds")
     print(f"Video combining time: {combine_processing_time:.2f} seconds")
     print(f"Total processing time: {left_processing_time + right_processing_time + combine_processing_time:.2f} seconds")
-
-    # Calculate and report efficiency
-    final_duration = min(left_length, right_length)
-    efficiency = (left_processing_time + right_processing_time + combine_processing_time) / final_duration * 100
     print(f"Video duration: {final_duration:.2f} seconds")
+    efficiency = (left_processing_time + right_processing_time + combine_processing_time) / final_duration * 100
     print(f"Efficiency: {efficiency:.2f}% of the final output video duration")
 
 if __name__ == "__main__":
