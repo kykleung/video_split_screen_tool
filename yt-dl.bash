@@ -21,8 +21,13 @@ if echo "$FORMATS_OUTPUT" | grep -q "^\s*312\s"; then
 elif echo "$FORMATS_OUTPUT" | grep -q "^\s*232\s"; then
     echo "Format ID 232 found. Downloading video (232) and audio (234)..."
     yt-dlp --no-skip-unavailable-fragments --abort-on-unavailable-fragments -f "232+234" --merge-output-format mp4 "$YOUTUBE_LINK"
+# Check if format ID 136 is available (allowing for leading whitespace)
+elif echo "$FORMATS_OUTPUT" | grep -q "^\s*136\s"; then
+    echo "Format ID 136 found. Downloading video (136) and audio (251)..."
+    yt-dlp --no-skip-unavailable-fragments --abort-on-unavailable-fragments -f "136+251" --merge-output-format mp4 "$YOUTUBE_LINK"
+
 else
-    echo "No suitable video format (ID 312 or 232) found for $YOUTUBE_LINK."
+    echo "No suitable video format (ID 312 or 232 or 136) found for $YOUTUBE_LINK."
     echo "Available formats:"
     echo "$FORMATS_OUTPUT"
     exit 1
