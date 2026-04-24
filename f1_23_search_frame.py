@@ -3,6 +3,8 @@ from tkinter import messagebox, Label, filedialog
 import cv2
 from PIL import Image, ImageTk
 import sys
+import os
+import numpy as np
 
 class VideoFrameExtractor(tk.Tk):
     def __init__(self, file_path):
@@ -15,6 +17,8 @@ class VideoFrameExtractor(tk.Tk):
         self.current_image = None
         self.display_image = None
         self.fps = 0  # Frames per second of the video
+        self.mask_pixels = None
+        self.mask_pixel_count = 0
 
         self.canvas = tk.Canvas(self)
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -34,6 +38,9 @@ class VideoFrameExtractor(tk.Tk):
         self.jump_entry = tk.Entry(control_frame)
         self.jump_entry.bind("<Return>", self.jump_to_frame)
         self.jump_entry.pack(side=tk.LEFT)
+
+        btn_auto_detect_red = tk.Button(control_frame, text="Auto Detect Red", command=self.auto_detect_red_frame)
+        btn_auto_detect_red.pack(side=tk.RIGHT)
 
         btn_save_frame = tk.Button(control_frame, text="Save Frame", command=self.save_frame)
         btn_save_frame.pack(side=tk.RIGHT)
@@ -74,6 +81,10 @@ class VideoFrameExtractor(tk.Tk):
         self.fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
         self.current_frame = 0
 
+        frame_width = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.load_mask(frame_width, frame_height)
+
         # Set the width to 1280 pixels and calculate the height to maintain 16:9 aspect ratio
         self.width = 960
         self.height = int(self.width * 9 / 16)
@@ -83,11 +94,192 @@ class VideoFrameExtractor(tk.Tk):
 
         self.show_frame()
 
+    def load_mask(self, frame_width, frame_height):
+        mask_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mask.png")
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+
+        if mask is None:
+            self.mask_pixels = None
+            self.mask_pixel_count = 0
+            messagebox.showwarning("Mask Missing", f"Could not load mask file: {mask_path}")
+            return
+
+        resized_mask = cv2.resize(mask, (frame_width, frame_height), interpolation=cv2.INTER_NEAREST)
+        _, binary_mask = cv2.threshold(resized_mask, 127, 255, cv2.THRESH_BINARY)
+        self.mask_pixels = binary_mask > 0
+        self.mask_pixel_count = int(np.count_nonzero(self.mask_pixels))
+
+        if self.mask_pixel_count == 0:
+            self.mask_pixels = None
+            messagebox.showwarning("Mask Invalid", "mask.png did not contain any white mask pixels after resizing.")
+
+    def calculate_red_score(self, frame):
+        if self.mask_pixels is None or self.mask_pixel_count == 0:
+            return -1.0
+
+        rgb_frame = frame.astype(np.float32) / 255.0
+        r_channel = rgb_frame[:, :, 2]
+        g_channel = rgb_frame[:, :, 1]
+        b_channel = rgb_frame[:, :, 0]
+
+        # Blend geometric closeness to pure red with red dominance to reduce false positives.
+        distance_to_red = np.sqrt((1.0 - r_channel) ** 2 + g_channel ** 2 + b_channel ** 2)
+        closeness_to_red = 1.0 - (distance_to_red / np.sqrt(3.0))
+        red_dominance = np.clip(r_channel - np.maximum(g_channel, b_channel), 0.0, 1.0)
+
+        combined_score = (0.4 * closeness_to_red) + (0.6 * red_dominance)
+        return float(np.mean(combined_score[self.mask_pixels]))
+
+    def find_frame_before_red_drop(self, start_frame, peak_score):
+        # Balanced defaults: require both relative and absolute drop to avoid noise-triggered detection.
+        drop_ratio_threshold = 0.70
+        drop_abs_threshold = 0.07
+        consecutive_drop_frames_required = 2
+
+        if self.vid_cap is None or start_frame >= self.total_frames - 1:
+            return start_frame, peak_score, start_frame, peak_score, False
+
+        last_stable_frame = start_frame
+        last_stable_score = peak_score
+        first_drop_frame = None
+        first_drop_score = None
+        drop_streak = 0
+
+        total_refine_frames = max(self.total_frames - (start_frame + 1), 1)
+
+        for offset, frame_number in enumerate(range(start_frame + 1, self.total_frames), start=1):
+            self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+            ret, frame = self.vid_cap.read()
+            if not ret:
+                continue
+
+            current_score = self.calculate_red_score(frame)
+            relative_threshold = peak_score * drop_ratio_threshold
+            is_significant_drop = (
+                current_score <= relative_threshold
+                and (peak_score - current_score) >= drop_abs_threshold
+            )
+
+            if is_significant_drop:
+                if drop_streak == 0:
+                    first_drop_frame = frame_number
+                    first_drop_score = current_score
+                drop_streak += 1
+            else:
+                drop_streak = 0
+                first_drop_frame = None
+                first_drop_score = None
+                last_stable_frame = frame_number
+                last_stable_score = current_score
+
+            if offset % max(int(self.fps), 1) == 0 or frame_number == self.total_frames - 1:
+                percent = (offset / total_refine_frames) * 100
+                refine_text = (
+                    f"Refining lights-out frame... {percent:05.2f}% "
+                    f"(score: {current_score:.4f}, threshold: {relative_threshold:.4f})"
+                )
+                self.status_label.config(text=refine_text)
+                self.update_idletasks()
+                print(refine_text, end="\r", flush=True)
+
+            if drop_streak >= consecutive_drop_frames_required and first_drop_frame is not None:
+                return last_stable_frame, last_stable_score, first_drop_frame, first_drop_score, True
+
+        return start_frame, peak_score, start_frame, peak_score, False
+
+    def auto_detect_red_frame(self):
+        if self.vid_cap is None:
+            return
+
+        if self.mask_pixels is None or self.mask_pixel_count == 0:
+            messagebox.showerror("Mask Error", "Cannot run detection without a valid mask.png.")
+            return
+
+        stride_seconds = 0.5
+        stride_frames = max(1, int(round(self.fps * stride_seconds)))
+
+        self.status_label.config(
+            text=f"Scanning frames for red lights (every {stride_seconds:.1f}s)..."
+        )
+        self.update_idletasks()
+        print(f"Scanning frames for red lights (every {stride_seconds:.1f}s)...")
+
+        best_frame_number = self.current_frame
+        best_score = -1.0
+        processed_samples = 0
+        printed_inline_progress = False
+
+        frame_indices = list(range(0, self.total_frames, stride_frames))
+        if self.total_frames > 0 and frame_indices and frame_indices[-1] != self.total_frames - 1:
+            frame_indices.append(self.total_frames - 1)
+
+        total_samples = len(frame_indices)
+
+        for sample_index, frame_number in enumerate(frame_indices, start=1):
+            self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+            ret, frame = self.vid_cap.read()
+            if not ret:
+                continue
+
+            score = self.calculate_red_score(frame)
+            if score > best_score:
+                best_score = score
+                best_frame_number = frame_number
+
+            processed_samples += 1
+
+            if sample_index % max(int(self.fps), 1) == 0 or sample_index == total_samples:
+                percent = (sample_index / max(total_samples, 1)) * 100
+                progress_text = (
+                    f"Scanning frames for red lights (every {stride_seconds:.1f}s)... "
+                    f"{percent:05.2f}% (best score: {best_score:.4f})"
+                )
+                self.status_label.config(text=progress_text)
+                self.update_idletasks()
+                print(progress_text, end="\r", flush=True)
+                printed_inline_progress = True
+
+        if printed_inline_progress:
+            print()
+
+        if processed_samples == 0:
+            messagebox.showerror("Detection Error", "No frames were processed during auto detection.")
+            return
+
+        print("Refining detected peak to frame right before red lights disappear...")
+        pre_drop_frame, pre_drop_score, first_drop_frame, first_drop_score, drop_found = self.find_frame_before_red_drop(
+            best_frame_number,
+            best_score,
+        )
+        print()
+
+        self.current_frame = pre_drop_frame
+        self.show_frame()
+
+        if drop_found:
+            final_text = (
+                f"Pre-drop frame: {pre_drop_frame} score {pre_drop_score:.4f} | "
+                f"First drop frame: {first_drop_frame} score {first_drop_score:.4f}"
+            )
+        else:
+            final_text = (
+                f"Frame: {best_frame_number} (peak red) | Peak score: {best_score:.4f} | "
+                "No significant drop found ahead"
+            )
+
+        self.status_label.config(text=final_text)
+        print(final_text)
+
     def show_frame(self):
         if self.vid_cap is not None:
             self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
             ret, frame = self.vid_cap.read()
             if ret:
+                # Keep the UI frame index aligned with the actual decoded frame index.
+                actual_frame = int(self.vid_cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
+                if actual_frame >= 0:
+                    self.current_frame = actual_frame
+
                 self.current_image = frame
 
                 if self.width > 0 and self.height > 0:
