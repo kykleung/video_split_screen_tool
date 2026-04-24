@@ -19,6 +19,12 @@ class VideoFrameExtractor(tk.Tk):
         self.fps = 0  # Frames per second of the video
         self.mask_pixels = None
         self.mask_pixel_count = 0
+        self.nearby_penalty_pixels = None
+        self.nearby_penalty_pixel_count = 0
+        self.nearby_penalty_weight = 0.35
+        self.nearby_penalty_radius_px = 10
+        self.search_window_increment_seconds = 5 * 60
+        self.search_window_start_seconds = 0
 
         self.canvas = tk.Canvas(self)
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -80,6 +86,7 @@ class VideoFrameExtractor(tk.Tk):
         self.total_frames = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
         self.current_frame = 0
+        self.search_window_start_seconds = 0
 
         frame_width = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -101,6 +108,8 @@ class VideoFrameExtractor(tk.Tk):
         if mask is None:
             self.mask_pixels = None
             self.mask_pixel_count = 0
+            self.nearby_penalty_pixels = None
+            self.nearby_penalty_pixel_count = 0
             messagebox.showwarning("Mask Missing", f"Could not load mask file: {mask_path}")
             return
 
@@ -109,8 +118,19 @@ class VideoFrameExtractor(tk.Tk):
         self.mask_pixels = binary_mask > 0
         self.mask_pixel_count = int(np.count_nonzero(self.mask_pixels))
 
+        kernel_size = max(3, (2 * self.nearby_penalty_radius_px) + 1)
+        penalty_kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+        dilated_mask = cv2.dilate(binary_mask, penalty_kernel, iterations=1) > 0
+        self.nearby_penalty_pixels = np.logical_and(dilated_mask, np.logical_not(self.mask_pixels))
+        self.nearby_penalty_pixel_count = int(np.count_nonzero(self.nearby_penalty_pixels))
+
+        if self.nearby_penalty_pixel_count == 0:
+            self.nearby_penalty_pixels = None
+
         if self.mask_pixel_count == 0:
             self.mask_pixels = None
+            self.nearby_penalty_pixels = None
+            self.nearby_penalty_pixel_count = 0
             messagebox.showwarning("Mask Invalid", "mask.png did not contain any white mask pixels after resizing.")
 
     def calculate_red_score(self, frame):
@@ -128,7 +148,15 @@ class VideoFrameExtractor(tk.Tk):
         red_dominance = np.clip(r_channel - np.maximum(g_channel, b_channel), 0.0, 1.0)
 
         combined_score = (0.4 * closeness_to_red) + (0.6 * red_dominance)
-        return float(np.mean(combined_score[self.mask_pixels]))
+        in_mask_score = float(np.mean(combined_score[self.mask_pixels]))
+
+        nearby_penalty_score = 0.0
+        if self.nearby_penalty_pixels is not None and self.nearby_penalty_pixel_count > 0:
+            # Penalize nearby red bleed outside the circles.
+            nearby_penalty_score = float(np.mean(red_dominance[self.nearby_penalty_pixels]))
+
+        final_score = in_mask_score - (self.nearby_penalty_weight * nearby_penalty_score)
+        return float(np.clip(final_score, -1.0, 1.0))
 
     def find_frame_before_red_drop(self, start_frame, peak_score):
         # Balanced defaults: require both relative and absolute drop to avoid noise-triggered detection.
@@ -198,20 +226,52 @@ class VideoFrameExtractor(tk.Tk):
         stride_seconds = 0.5
         stride_frames = max(1, int(round(self.fps * stride_seconds)))
 
+        current_window_start_seconds = self.search_window_start_seconds
+        current_window_end_seconds = current_window_start_seconds + self.search_window_increment_seconds
+
+        if self.fps > 0:
+            start_frame = min(
+                self.total_frames,
+                max(0, int(round(current_window_start_seconds * self.fps))),
+            )
+            end_frame_exclusive = min(
+                self.total_frames,
+                max(1, int(round(current_window_end_seconds * self.fps))),
+            )
+        else:
+            start_frame = 0
+            end_frame_exclusive = self.total_frames
+
+        if start_frame >= self.total_frames or start_frame >= end_frame_exclusive:
+            messagebox.showinfo(
+                "Search Complete",
+                "No more 5-minute windows left in this video. Reload the video to restart from 0:00.",
+            )
+            return
+
+        window_start_minutes = current_window_start_seconds / 60.0
+        window_end_minutes = (end_frame_exclusive / self.fps) / 60.0 if self.fps > 0 else 0
+
         self.status_label.config(
-            text=f"Scanning frames for red lights (every {stride_seconds:.1f}s)..."
+            text=(
+                f"Scanning red lights in {window_start_minutes:.1f}-{window_end_minutes:.1f} min "
+                f"(every {stride_seconds:.1f}s)..."
+            )
         )
         self.update_idletasks()
-        print(f"Scanning frames for red lights (every {stride_seconds:.1f}s)...")
+        print(
+            f"Scanning red lights in {window_start_minutes:.1f}-{window_end_minutes:.1f} min "
+            f"(every {stride_seconds:.1f}s)..."
+        )
 
         best_frame_number = self.current_frame
         best_score = -1.0
         processed_samples = 0
         printed_inline_progress = False
 
-        frame_indices = list(range(0, self.total_frames, stride_frames))
-        if self.total_frames > 0 and frame_indices and frame_indices[-1] != self.total_frames - 1:
-            frame_indices.append(self.total_frames - 1)
+        frame_indices = list(range(start_frame, end_frame_exclusive, stride_frames))
+        if end_frame_exclusive > start_frame and frame_indices and frame_indices[-1] != end_frame_exclusive - 1:
+            frame_indices.append(end_frame_exclusive - 1)
 
         total_samples = len(frame_indices)
 
@@ -231,7 +291,8 @@ class VideoFrameExtractor(tk.Tk):
             if sample_index % max(int(self.fps), 1) == 0 or sample_index == total_samples:
                 percent = (sample_index / max(total_samples, 1)) * 100
                 progress_text = (
-                    f"Scanning frames for red lights (every {stride_seconds:.1f}s)... "
+                    f"Scanning red lights in {window_start_minutes:.1f}-{window_end_minutes:.1f} min "
+                    f"(every {stride_seconds:.1f}s)... "
                     f"{percent:05.2f}% (best score: {best_score:.4f})"
                 )
                 self.status_label.config(text=progress_text)
@@ -269,6 +330,22 @@ class VideoFrameExtractor(tk.Tk):
 
         self.status_label.config(text=final_text)
         print(final_text)
+
+        self.search_window_start_seconds += self.search_window_increment_seconds
+        if self.fps > 0:
+            max_video_seconds = self.total_frames / self.fps
+            if self.search_window_start_seconds >= max_video_seconds:
+                print("Next search window: end of video reached")
+            else:
+                next_window_start_seconds = self.search_window_start_seconds
+                next_window_end_seconds = min(
+                    next_window_start_seconds + self.search_window_increment_seconds,
+                    max_video_seconds,
+                )
+                print(
+                    f"Next search window: {next_window_start_seconds / 60.0:.1f}-"
+                    f"{next_window_end_seconds / 60.0:.1f} min"
+                )
 
     def show_frame(self):
         if self.vid_cap is not None:
