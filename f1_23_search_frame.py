@@ -317,10 +317,14 @@ class VideoFrameExtractor(tk.Tk):
         self.current_frame = pre_drop_frame
         self.show_frame()
 
+        selected_time_seconds = (self.current_frame / self.fps) if self.fps > 0 else 0.0
+
         if drop_found:
+            pre_drop_time_seconds = (pre_drop_frame / self.fps) if self.fps > 0 else 0.0
+            first_drop_time_seconds = (first_drop_frame / self.fps) if self.fps > 0 else 0.0
             final_text = (
-                f"Pre-drop frame: {pre_drop_frame} score {pre_drop_score:.4f} | "
-                f"First drop frame: {first_drop_frame} score {first_drop_score:.4f}"
+                f"Pre-drop frame: {pre_drop_frame} ({pre_drop_time_seconds:.4f}s) score {pre_drop_score:.4f} | "
+                f"First drop frame: {first_drop_frame} ({first_drop_time_seconds:.4f}s) score {first_drop_score:.4f}"
             )
         else:
             final_text = (
@@ -330,6 +334,7 @@ class VideoFrameExtractor(tk.Tk):
 
         self.status_label.config(text=final_text)
         print(final_text)
+        print(f"Selected frame/time: {self.current_frame} ({selected_time_seconds:.4f}s)")
 
         self.search_window_start_seconds += self.search_window_increment_seconds
         if self.fps > 0:
