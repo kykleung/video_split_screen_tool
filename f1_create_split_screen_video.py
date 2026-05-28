@@ -12,6 +12,32 @@ def get_video_duration(video_path):
     return float(result.stdout.strip())
 
 
+def measure_loudness(video_path, start_time, duration, sample_duration=120):
+    """
+    Measure integrated loudness (LUFS) of a video's audio track using EBU R128.
+    Samples up to `sample_duration` seconds for speed (default 2 min).
+    Returns the integrated loudness as a float, or None on failure.
+    """
+    scan_dur = min(duration, sample_duration)
+    cmd = [
+        "ffmpeg", "-ss", str(start_time), "-i", video_path,
+        "-t", str(scan_dur),
+        "-af", "ebur128=peak=true",
+        "-f", "null", "-"
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    for line in result.stderr.splitlines():
+        stripped = line.strip()
+        # Summary block line looks like: "    I:         -23.1 LUFS"
+        if stripped.startswith("I:") and "LUFS" in stripped:
+            parts = stripped.split()
+            try:
+                return float(parts[1])
+            except (IndexError, ValueError):
+                pass
+    return None
+
+
 def process_and_combine_videos(
     left_video_path, left_start_time,
     right_video_path, right_start_time,
@@ -20,31 +46,72 @@ def process_and_combine_videos(
     preset="medium",
     use_hwaccel=False,
     single_pass=True,
+    normalize_audio=False,
+    stereo_pan=False,
+    auto_balance=False,
+    left_volume_db=0.0,
+    right_volume_db=0.0,
 ):
     left_available_duration = get_video_duration(left_video_path) - left_start_time
     right_available_duration = get_video_duration(right_video_path) - right_start_time
 
-    # Only process up to the shortest available duration (or output_length if specified)
     final_duration = min(left_available_duration, right_available_duration)
     if output_length is not None:
         final_duration = min(final_duration, output_length)
 
     video_encoder = "h264_videotoolbox" if use_hwaccel else "libx264"
-    # VideoToolbox uses -q:v (quality scale) instead of -crf
     quality_args = ["-q:v", "50"] if use_hwaccel else ["-crf", "18"]
 
+    # --- Resolve per-stream volume adjustments ---
+    left_db  = left_volume_db
+    right_db = right_volume_db
+
+    if auto_balance:
+        print("Measuring audio loudness of both streams (sampling up to 2 min each)…")
+        left_lufs  = measure_loudness(left_video_path,  left_start_time,  final_duration)
+        right_lufs = measure_loudness(right_video_path, right_start_time, final_duration)
+        if left_lufs is None or right_lufs is None:
+            print(f"  Warning: could not measure loudness "
+                  f"(left={left_lufs}, right={right_lufs}). Skipping auto-balance.")
+        else:
+            target_lufs = -23.0
+            left_db  += target_lufs - left_lufs
+            right_db += target_lufs - right_lufs
+            print(f"  Left  stream: {left_lufs:+.1f} LUFS  → applying {left_db:+.1f} dB gain")
+            print(f"  Right stream: {right_lufs:+.1f} LUFS  → applying {right_db:+.1f} dB gain")
+
+    # Build per-stream audio filter suffixes
+    audio_norm   = ",dynaudnorm=f=150:g=15" if normalize_audio else ""
+    left_vol_f   = f",volume={left_db:.2f}dB"  if left_db  != 0 else ""
+    right_vol_f  = f",volume={right_db:.2f}dB" if right_db != 0 else ""
+
     if single_pass:
-        # --------------- Single-pass: crop + hstack + encode in one ffmpeg call ---------------
-        # This avoids writing/reading two intermediate files and re-encoding a third time.
+        if stereo_pan:
+            audio_filters = (
+                f"[0:a]atrim=start={left_start_time}:duration={final_duration},"
+                f"asetpts=PTS-STARTPTS{audio_norm}{left_vol_f},"
+                f"aformat=channel_layouts=mono[al_m];"
+                f"[1:a]atrim=start={right_start_time}:duration={final_duration},"
+                f"asetpts=PTS-STARTPTS{audio_norm}{right_vol_f},"
+                f"aformat=channel_layouts=mono[ar_m];"
+                f"[al_m][ar_m]amerge=inputs=2,pan=stereo|FL=c0|FR=c1[a]"
+            )
+        else:
+            audio_filters = (
+                f"[0:a]atrim=start={left_start_time}:duration={final_duration},"
+                f"asetpts=PTS-STARTPTS{audio_norm}{left_vol_f}[al];"
+                f"[1:a]atrim=start={right_start_time}:duration={final_duration},"
+                f"asetpts=PTS-STARTPTS{audio_norm}{right_vol_f}[ar];"
+                f"[al][ar]amix=inputs=2:duration=first:dropout_transition=3[a]"
+            )
+
         filter_complex = (
             f"[0:v]trim=start={left_start_time}:duration={final_duration},setpts=PTS-STARTPTS,"
             f"crop=in_w*0.75:in_h,scale=960:-1,pad=960:1080:(ow-iw)/2:(oh-ih)/2:black[left];"
             f"[1:v]trim=start={right_start_time}:duration={final_duration},setpts=PTS-STARTPTS,"
             f"crop=in_w*0.75:in_h,scale=960:-1,pad=960:1080:(ow-iw)/2:(oh-ih)/2:black[right];"
             f"[left][right]hstack=inputs=2[v];"
-            f"[0:a]atrim=start={left_start_time}:duration={final_duration},asetpts=PTS-STARTPTS[al];"
-            f"[1:a]atrim=start={right_start_time}:duration={final_duration},asetpts=PTS-STARTPTS[ar];"
-            f"[al][ar]amix=inputs=2:duration=first:dropout_transition=3[a]"
+            + audio_filters
         )
         cmd = [
             "ffmpeg",
@@ -54,12 +121,11 @@ def process_and_combine_videos(
             "-map", "[v]", "-map", "[a]",
             "-c:v", video_encoder,
         ] + quality_args + [
-            "-preset", preset,  # ignored by videotoolbox but harmless
+            "-preset", preset,
             "-c:a", "aac", "-b:a", "192k",
             "-threads", "0",
             output_path
         ]
-        # Remove -preset for hwaccel (VideoToolbox doesn't support it)
         if use_hwaccel:
             cmd = [x for x in cmd if x != "-preset" and x != preset]
 
@@ -80,11 +146,13 @@ def process_and_combine_videos(
         timings = {}
         exceptions = {}
 
-        def process_side(label, in_path, start_sec, out_path):
+        def process_side(label, in_path, start_sec, out_path, vol_filter):
             t0 = time.time()
+            af = f"asetpts=PTS-STARTPTS{audio_norm}{vol_filter}"
             crop_cmd = [
                 "ffmpeg", "-i", in_path, "-ss", str(start_sec),
                 "-vf", "crop=in_w*0.75:in_h,scale=960:-1,pad=960:1080:(ow-iw)/2:(oh-ih)/2:black",
+                "-af", af,
                 "-t", str(final_duration),
                 "-c:v", video_encoder,
             ] + quality_args + [
@@ -99,8 +167,8 @@ def process_and_combine_videos(
                 exceptions[label] = e
             timings[label] = time.time() - t0
 
-        left_thread = threading.Thread(target=process_side, args=("left", left_video_path, left_start_time, left_temp))
-        right_thread = threading.Thread(target=process_side, args=("right", right_video_path, right_start_time, right_temp))
+        left_thread  = threading.Thread(target=process_side, args=("left",  left_video_path,  left_start_time,  left_temp,  left_vol_f))
+        right_thread = threading.Thread(target=process_side, args=("right", right_video_path, right_start_time, right_temp, right_vol_f))
 
         left_thread.start()
         right_thread.start()
@@ -110,11 +178,19 @@ def process_and_combine_videos(
         if exceptions:
             raise RuntimeError(f"Side processing failed: {exceptions}")
 
-        # Combine videos (stream-copy video from already-encoded temp files, re-encode audio only)
         start_time = time.time()
+        if stereo_pan:
+            combine_audio = (
+                "[0:a]aformat=channel_layouts=mono[al_m];"
+                "[1:a]aformat=channel_layouts=mono[ar_m];"
+                "[al_m][ar_m]amerge=inputs=2,pan=stereo|FL=c0|FR=c1[a]"
+            )
+        else:
+            combine_audio = "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=3[a]"
+
         combine_cmd = [
             "ffmpeg", "-i", left_temp, "-i", right_temp,
-            "-filter_complex", "[0:v][1:v]hstack=inputs=2:shortest=1[v];[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=3[a]",
+            "-filter_complex", f"[0:v][1:v]hstack=inputs=2:shortest=1[v];{combine_audio}",
             "-map", "[v]", "-map", "[a]",
             "-c:v", video_encoder,
         ] + quality_args + [
@@ -146,25 +222,31 @@ if __name__ == "__main__":
         description="Process and combine two videos side by side to achieve a standard 1080p resolution output video."
     )
     parser.add_argument("left_video_path", help="Path to the left video file.")
-    parser.add_argument("left_start_time", type=float, help="Starting time of the left video in seconds, can be a decimal.")
+    parser.add_argument("left_start_time", type=float, help="Starting time of the left video in seconds.")
     parser.add_argument("right_video_path", help="Path to the right video file.")
-    parser.add_argument("right_start_time", type=float, help="Starting time of the right video in seconds, can be a decimal.")
-    parser.add_argument("--output_length", type=float, help="Desired length of the output video in seconds, can be a decimal.", default=None)
-    parser.add_argument("--output_path", default="combined_video.mp4", help="Output path for the combined video.")
-    parser.add_argument(
-        "--preset", default="medium",
-        choices=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"],
-        help="libx264 encoding preset (default: medium). Use 'fast' or 'ultrafast' for maximum speed."
-    )
-    parser.add_argument(
-        "--hwaccel", action="store_true",
-        help="Use macOS VideoToolbox hardware H.264 encoder (h264_videotoolbox) for near-realtime encoding."
-    )
-    parser.add_argument(
-        "--three-step", action="store_true",
-        help="Use the older three-step approach (process left, process right, combine) with parallel left/right encoding. "
-             "By default the faster single-pass mode is used."
-    )
+    parser.add_argument("right_start_time", type=float, help="Starting time of the right video in seconds.")
+    parser.add_argument("--output_length", type=float, default=None,
+                        help="Desired length of the output video in seconds.")
+    parser.add_argument("--output_path", default="combined_video.mp4",
+                        help="Output path for the combined video.")
+    parser.add_argument("--preset", default="medium",
+                        choices=["ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow"],
+                        help="libx264 encoding preset (default: medium).")
+    parser.add_argument("--hwaccel", action="store_true",
+                        help="Use macOS VideoToolbox hardware H.264 encoder.")
+    parser.add_argument("--three-step", action="store_true",
+                        help="Use parallel three-step encode instead of single-pass.")
+    parser.add_argument("--normalize-audio", action="store_true",
+                        help="Apply per-frame dynamic loudness normalisation (dynaudnorm) to each stream before mixing.")
+    parser.add_argument("--stereo-pan", action="store_true",
+                        help="Hard-pan: left video audio → left ear, right video audio → right ear.")
+    parser.add_argument("--auto-balance", action="store_true",
+                        help="Pre-scan both audio streams with EBU R128, then apply exact dB gain to bring both to "
+                             "-23 LUFS before mixing. Most reliable fix for source-level imbalance.")
+    parser.add_argument("--left-volume", type=float, default=0.0, metavar="DB",
+                        help="Manual dB adjustment for the left audio stream (e.g. -3 to quieten, +3 to boost).")
+    parser.add_argument("--right-volume", type=float, default=0.0, metavar="DB",
+                        help="Manual dB adjustment for the right audio stream.")
 
     args = parser.parse_args()
 
@@ -175,4 +257,9 @@ if __name__ == "__main__":
         preset=args.preset,
         use_hwaccel=args.hwaccel,
         single_pass=not args.three_step,
+        normalize_audio=args.normalize_audio,
+        stereo_pan=args.stereo_pan,
+        auto_balance=args.auto_balance,
+        left_volume_db=args.left_volume,
+        right_volume_db=args.right_volume,
     )
