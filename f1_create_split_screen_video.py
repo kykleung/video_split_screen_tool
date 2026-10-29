@@ -4,12 +4,32 @@ import time
 import threading
 
 def get_video_duration(video_path):
-    result = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", video_path],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
-    return float(result.stdout.strip())
+    command = [
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", video_path,
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or "").strip() or f"exit status {error.returncode}"
+        raise ValueError(f"ffprobe failed for {video_path}: {detail}") from error
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        raise ValueError(f"ffprobe returned no duration for {video_path}") from None
+
+
+def require_non_negative_start(side, start_time):
+    if start_time < 0:
+        raise ValueError(f"{side} start time must be zero or greater, got {start_time}")
+
+
+def require_positive_duration(duration, left_video_path, right_video_path):
+    if duration <= 0:
+        raise ValueError(
+            f"output duration must be positive, got {duration:g}. "
+            f"Check the start times against {left_video_path} and {right_video_path}."
+        )
 
 
 def measure_loudness(video_path, start_time, duration, sample_duration=120):
@@ -22,6 +42,7 @@ def measure_loudness(video_path, start_time, duration, sample_duration=120):
     cmd = [
         "ffmpeg", "-ss", str(start_time), "-i", video_path,
         "-t", str(scan_dur),
+        "-vn",
         "-af", "ebur128=peak=true",
         "-f", "null", "-"
     ]
@@ -43,7 +64,7 @@ def process_and_combine_videos(
     right_video_path, right_start_time,
     output_length=None,
     output_path="combined_video.mp4",
-    preset="medium",
+    preset="veryfast",
     use_hwaccel=False,
     single_pass=True,
     normalize_audio=False,
@@ -52,12 +73,16 @@ def process_and_combine_videos(
     left_volume_db=0.0,
     right_volume_db=0.0,
 ):
+    require_non_negative_start("left", left_start_time)
+    require_non_negative_start("right", right_start_time)
+
     left_available_duration = get_video_duration(left_video_path) - left_start_time
     right_available_duration = get_video_duration(right_video_path) - right_start_time
 
     final_duration = min(left_available_duration, right_available_duration)
     if output_length is not None:
         final_duration = min(final_duration, output_length)
+    require_positive_duration(final_duration, left_video_path, right_video_path)
 
     video_encoder = "h264_videotoolbox" if use_hwaccel else "libx264"
     quality_args = ["-q:v", "50"] if use_hwaccel else ["-crf", "18"]
@@ -114,7 +139,7 @@ def process_and_combine_videos(
             + audio_filters
         )
         cmd = [
-            "ffmpeg",
+            "ffmpeg", "-y",
             "-i", left_video_path,
             "-i", right_video_path,
             "-filter_complex", filter_complex,
@@ -123,6 +148,7 @@ def process_and_combine_videos(
         ] + quality_args + [
             "-preset", preset,
             "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
             "-threads", "0",
             output_path
         ]
@@ -150,7 +176,7 @@ def process_and_combine_videos(
             t0 = time.time()
             af = f"asetpts=PTS-STARTPTS{audio_norm}{vol_filter}"
             crop_cmd = [
-                "ffmpeg", "-i", in_path, "-ss", str(start_sec),
+                "ffmpeg", "-y", "-i", in_path, "-ss", str(start_sec),
                 "-vf", "crop=in_w*0.75:in_h,scale=960:-1,pad=960:1080:(ow-iw)/2:(oh-ih)/2:black",
                 "-af", af,
                 "-t", str(final_duration),
@@ -189,13 +215,14 @@ def process_and_combine_videos(
             combine_audio = "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=3[a]"
 
         combine_cmd = [
-            "ffmpeg", "-i", left_temp, "-i", right_temp,
+            "ffmpeg", "-y", "-i", left_temp, "-i", right_temp,
             "-filter_complex", f"[0:v][1:v]hstack=inputs=2:shortest=1[v];{combine_audio}",
             "-map", "[v]", "-map", "[a]",
             "-c:v", video_encoder,
         ] + quality_args + [
             "-preset", preset,
             "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
             "-threads", "0", output_path
         ]
         if use_hwaccel:
@@ -229,9 +256,9 @@ if __name__ == "__main__":
                         help="Desired length of the output video in seconds.")
     parser.add_argument("--output_path", default="combined_video.mp4",
                         help="Output path for the combined video.")
-    parser.add_argument("--preset", default="medium",
+    parser.add_argument("--preset", default="veryfast",
                         choices=["ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow"],
-                        help="libx264 encoding preset (default: medium).")
+                        help="libx264 encoding preset (default: %(default)s).")
     parser.add_argument("--hwaccel", action="store_true",
                         help="Use macOS VideoToolbox hardware H.264 encoder.")
     parser.add_argument("--three-step", action="store_true",
