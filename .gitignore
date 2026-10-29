@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+.idea/
+
+# Local race recordings. reference_image.jpg and mask.png stay tracked.
+*.mp4
+*.mov
+*.mkv
+*.webm

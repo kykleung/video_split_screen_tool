@@ -1,39 +1,36 @@
 # Video Split Screen Tool Collection
 
+Scripts that line up two F1 race recordings and combine them into one 1920×1080 side-by-side video.
+
+Agents start at [AGENTS.md](AGENTS.md). Coding practices live in [.cursor/rules/coding-practices.mdc](.cursor/rules/coding-practices.mdc).
+
 # Setup
 
-The use of [pyenv](https://github.com/pyenv/pyenv) is recommended. The scripts in this repo have been run with Python 3.12.2
+[pyenv](https://github.com/pyenv/pyenv) is recommended. The interpreter pin is `.python-version`.
 
-## Requirements
-Run `pip install -r requirements.txt`
+Install Python packages with `pip install -r requirements.txt`.
 
-# One-Time Tools
+ffmpeg, ffprobe, and yt-dlp need to be on `PATH`.
 
-## f1\_23\_search\_frame.py
-Use  this to load a video and step through each frame to select and save a frame to be used for mask creation. This frame can also be used as the reference image for finding a similar frame from a video. This image file (`reference_image.jpg`) is also already included in the repo. 
+# Workflow
 
-## f1\_23\_create\_mask\_image.py
-Load an image (i.e., output of `f1\_23\_find\_mask\_frame.py`)
-Click on the image to add a similar-coloured blob to the mask. Hit q to finish and save the mask image. A mask image (`mask.png`) is included in this repo.
+1. Open one search window per recording and narrow down the shared moment in each:
 
-# Worfklow
+```bash
+python f1_23_search_frame.py jackey.mp4 &
+python f1_23_search_frame.py keith.mp4 &
+```
 
-## f1\_23\_search\_start\_frame.py 
-Loads a video file and finds the frame most similar to the masked portion of the `reference_image.jpg` image. Run with `-h` option for further details. The output is the time (and frame number) of the most similar frame. This frame will also be displayed. Run this script of the two videos that will be combined together as a split-screen video. Useful for aligning race starts where cars start in different positions
+2. Encode with the left file at 0 and the right file at `right_sync - left_sync`. Typical flags are `--stereo-pan` and `--auto-balance`.
 
+```bash
+python f1_create_split_screen_video.py jackey.mp4 $((0)) keith.mp4 $((205.4052-141.5581)) \
+  --stereo-pan --auto-balance \
+  --output_path F1_25_2-player_career_season_1_R07_Imola_race_side-by-side.mp4
+```
 
-## f1\_23\_search\_matching\_frame.py
-Loads two videos and finds the earliest mutually matching frames. Optionally set duration and the starting time of both videos.
+Run that in zsh. `$(( ))` there accepts the decimal subtraction. Each side keeps the centre 75% of the frame, scales to 960×1080, and the pair stacks to 1920×1080.
 
-###Usage
-`f1_23_search_matching_frame.py [-h] [--duration DURATION] [--video1_start VIDEO1_START] [--video2_start VIDEO2_START] video1_path video2_path`
+Optional download: `./yt-dl.bash <YouTube link> [filename]` (yt-dlp formats `299+251`, then `232+234`, then `136+251`).
 
-## f1\_23\_create\_split\_screen\_video.py
-Process and combine two videos side by side to achieve a standard 1080p resolution output video.
-
-###Usage
-`f1_23_create_split_screen_video.py [-h] [--output_path OUTPUT_PATH] left_video_path left_start_time right_video_path right_start_time`
-
-# Misc
-## YouTube video download
-`youtube-dl` is a convenient command line tool to use for pulling YouTube videos given a link. 
+The other `f1_23_*.py` files are older and not part of this workflow.

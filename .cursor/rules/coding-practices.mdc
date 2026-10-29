@@ -1,0 +1,55 @@
+---
+description: Python and shell practices for scripts, ffmpeg calls, and CLIs. Apply when editing code in this repo.
+globs: "**/*.{py,bash,sh}"
+alwaysApply: false
+---
+
+# Coding practices
+
+Adapted from igloo's C++ practices for this script repo.
+
+## Basic principles
+
+- Use English for code and documentation. Use Canadian spelling in new prose.
+- Prefer names that make a comment unnecessary. Add a `"""` docstring only when the arguments are not obvious from the signature.
+- Write short, single-purpose functions. Aim for about 40 lines. Stay under 100.
+- Return early to keep nesting flat.
+- Name every magic number. Crop fraction, output size, LUFS target, and red-score weights are constants, not literals buried in a filter string.
+- Prefer complete words. Established short names are fine: `fps`, `sad`, `lufs`, `db`.
+
+## Naming
+
+- `snake_case` for files, functions, variables, and arguments.
+- PascalCase for classes.
+- `UPPER_SNAKE` for module-level constants.
+- Boolean names start with `is`, `has`, or `can`.
+- argparse flags are kebab-case. Their destinations are `snake_case`.
+
+## Scripts
+
+- Parse arguments with argparse under `if __name__ == "__main__"`, and keep the work in functions that take those values as parameters.
+- Pass paths in. `mask.png` and `reference_image.jpg` may stay as defaults for the lights-out tools. New functions take those paths as arguments.
+- Call ffmpeg, ffprobe, and yt-dlp with a subprocess argument list, `check=True`, and `text=True`. Leave `shell` at its default.
+- The scripts in use are `f1_23_search_frame.py` and `f1_create_split_screen_video.py`. Sync-frame edits go in the first. Side-by-side encoding goes in the second. Leave the other `f1_23_*.py` files unchanged unless the user names one.
+- Use tkinter only when a person has to click. Batch work stays headless.
+- Keep the picture contract: centre 75% of each frame, scale to 960 wide, pad to 960×1080, stack to 1920×1080.
+
+## Errors
+
+- Raise `ValueError` for bad arguments.
+- Let `subprocess.CalledProcessError` surface a failed ffmpeg or ffprobe call.
+- Catch a specific exception when you handle it. Include the command or path in the message.
+
+## Testing
+
+- Pure scoring and geometry functions get a pytest that builds arrays in memory.
+- Unit tests do not open video files or call ffmpeg.
+- Add pytest when the first pure function needs a test. Skip a test harness for a change that only edits an ffmpeg filter graph.
+
+## Layout and libraries
+
+- Line length is 120. The setting lives in `pyproject.toml`.
+- Indent with 4 spaces.
+- Runtime Python packages are `opencv-python`, `numpy`, `Pillow`, and `moviepy`, listed in `requirements.txt`.
+- ffmpeg, ffprobe, and yt-dlp are system tools. Leave them out of `requirements.txt`.
+- The interpreter pin is `.python-version`.
