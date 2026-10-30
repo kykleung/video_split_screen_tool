@@ -43,6 +43,21 @@ LAP_PTS_ORIGIN_TOLERANCE_SECONDS = 0.1
 INDEX_PROGRESS_STRIDE = 50
 LAP_INDEX_POLL_MS = 100
 WINDOW_CONTROL_HEIGHT = 140
+TIMER_CROP_X = 1740
+TIMER_CROP_Y = 80
+TIMER_CROP_WIDTH = 120
+TIMER_CROP_HEIGHT = 18
+TIMER_INK_THRESHOLD = 170
+TIMER_GLYPH_INK_MIN = 100
+TIMER_GLYPH_INK_MAX = 400
+TIMER_GLYPH_HEIGHT_MIN = 10
+TIMER_GLYPH_HEIGHT_MAX = 14
+TIMER_DASH_INK_MIN = 20
+TIMER_DASH_INK_MAX = 80
+TIMER_DASH_HEIGHT_MAX = 8
+TIMER_LONG_LEFT_MAX = 16
+TIMER_SHORT_LEFT_MIN = 40
+TIMER_REVEAL_SECONDS = 20.0
 
 LAP_DIGIT_TEMPLATE_ROWS = {
     0: (
@@ -358,6 +373,226 @@ def held_lap_start_time(frames, new_digit):
     return None
 
 
+def first_held_time(frames, predicate, hold_frames):
+    run_length = 0
+    run_start = None
+    for time_seconds, value in frames:
+        if not predicate(value):
+            run_length = 0
+            continue
+        if run_length == 0:
+            run_start = time_seconds
+        run_length += 1
+        if run_length >= hold_frames:
+            return run_start
+    return None
+
+
+def reference_measure(measured, actual_size, reference_size):
+    if actual_size <= 0:
+        return 0
+    return measured * reference_size / actual_size
+
+
+def timer_glyph_state(gray):
+    """Classify the top-right lap clock as absent, dashes, long, short, mid, or other."""
+    if gray.size == 0 or gray.shape[0] == 0 or gray.shape[1] == 0:
+        return "absent"
+    ink = gray > TIMER_INK_THRESHOLD
+    count = reference_measure(
+        int(np.count_nonzero(ink)), gray.size, TIMER_CROP_WIDTH * TIMER_CROP_HEIGHT,
+    )
+    if count < TIMER_DASH_INK_MIN:
+        return "absent"
+    vertical = np.zeros_like(ink)
+    vertical[1:-1] = ink[:-2] & ink[2:]
+    vertical_count = int(np.count_nonzero(vertical))
+    rows, columns = np.where(ink)
+    left = reference_measure(int(columns.min()), gray.shape[1], TIMER_CROP_WIDTH)
+    height = reference_measure(int(rows.max() - rows.min() + 1), gray.shape[0], TIMER_CROP_HEIGHT)
+    is_dash = (
+        vertical_count == 0
+        and height <= TIMER_DASH_HEIGHT_MAX
+        and count <= TIMER_DASH_INK_MAX
+    )
+    if is_dash:
+        return "dashes"
+    is_glyph = (
+        TIMER_GLYPH_INK_MIN <= count <= TIMER_GLYPH_INK_MAX
+        and TIMER_GLYPH_HEIGHT_MIN <= height <= TIMER_GLYPH_HEIGHT_MAX
+    )
+    if not is_glyph:
+        return "other"
+    if left <= TIMER_LONG_LEFT_MAX:
+        return "long"
+    if left >= TIMER_SHORT_LEFT_MIN:
+        return "short"
+    return "mid"
+
+
+def timer_crop_for_frame(frame_width, frame_height):
+    x = scale_reference_px(TIMER_CROP_X, frame_width, REFERENCE_FRAME_WIDTH)
+    y = scale_reference_px(TIMER_CROP_Y, frame_height, REFERENCE_FRAME_HEIGHT)
+    width = even_length(scale_reference_px(TIMER_CROP_WIDTH, frame_width, REFERENCE_FRAME_WIDTH))
+    height = even_length(scale_reference_px(TIMER_CROP_HEIGHT, frame_height, REFERENCE_FRAME_HEIGHT))
+    return width, height, x, y
+
+
+def garage_exit_brackets(samples):
+    """Return (previous_time, appearance_time) for each out-lap garage exit.
+
+    `samples` are (time_seconds, digit, timer_state). The tower has to return
+    with the dashed out-lap clock after the digit has been gone for longer than
+    LAP_DIGIT_MAX_GAP_SECONDS.
+    """
+    brackets = []
+    last_digit_time = None
+    previous_time = None
+    is_armed = True
+    for time_seconds, digit, timer_state in samples:
+        if digit is None:
+            is_long_gap = (
+                last_digit_time is not None
+                and time_seconds - last_digit_time > LAP_DIGIT_MAX_GAP_SECONDS
+            )
+            if is_long_gap:
+                is_armed = True
+                last_digit_time = None
+            previous_time = time_seconds
+            continue
+        if is_armed and previous_time is not None and timer_state == "dashes":
+            brackets.append((previous_time, time_seconds))
+        is_armed = False
+        last_digit_time = time_seconds
+        previous_time = time_seconds
+    return brackets
+
+
+def is_flying_timer_reveal(short_time, flying_brackets):
+    for _previous_time, new_time, _new_digit in flying_brackets:
+        earliest = new_time - TIMER_REVEAL_SECONDS
+        latest = new_time + TIMER_REVEAL_SECONDS
+        if earliest < short_time <= latest:
+            return True
+    return False
+
+
+def in_lap_brackets(timer_samples, flying_brackets):
+    """Return spans where the lap clock restarts and the lap digit does not step.
+
+    After a flying lap starts, the clock keeps the finished time for a few
+    seconds and then shows the live lap. That hand-off is not an in-lap.
+    """
+    brackets = []
+    previous = None
+    for time_seconds, state in timer_samples:
+        if previous is not None and previous[1] == "long" and state == "short":
+            if not is_flying_timer_reveal(time_seconds, flying_brackets):
+                brackets.append((previous[0], time_seconds))
+        previous = (time_seconds, state)
+    return brackets
+
+
+def format_clock_milliseconds(total_milliseconds):
+    if total_milliseconds <= 0:
+        raise ValueError(f"hot lap duration must be positive, got {total_milliseconds} ms")
+    minutes, remainder = divmod(total_milliseconds, 60_000)
+    seconds, milliseconds = divmod(remainder, 1000)
+    if minutes:
+        return f"{minutes}:{seconds:02d}.{milliseconds:03d}"
+    return f"{seconds}.{milliseconds:03d}"
+
+
+def format_hot_lap_time(duration_seconds):
+    return format_clock_milliseconds(int(round(duration_seconds * 1000)))
+
+
+def _next_event_time(events, index, kinds):
+    for later_time, later_kind in events[index + 1:]:
+        if later_kind in kinds:
+            return later_time
+        if later_kind == "out":
+            return None
+    return None
+
+
+def classify_finished_laps(flying_starts, garage_exits, in_lap_starts):
+    """Return (label, start_seconds) for finished out laps, hot laps, and in laps."""
+    kind_order = {"out": 0, "hot": 1, "in": 2}
+    events = [(start, "out") for start in garage_exits]
+    events.extend((start, "hot") for start in flying_starts)
+    events.extend((start, "in") for start in in_lap_starts)
+    events.sort(key=lambda item: (item[0], kind_order[item[1]]))
+    lines = []
+    for index, (time_seconds, kind) in enumerate(events):
+        if kind == "out":
+            if _next_event_time(events, index, {"hot"}) is None:
+                continue
+            lines.append(("out lap", time_seconds))
+            continue
+        if kind == "in":
+            lines.append(("in lap", time_seconds))
+            continue
+        end = _next_event_time(events, index, {"hot", "in"})
+        if end is None:
+            continue
+        duration_ms = int(round(end * 1000)) - int(round(time_seconds * 1000))
+        if duration_ms <= 0:
+            continue
+        lines.append((format_clock_milliseconds(duration_ms), time_seconds))
+    return lines
+
+
+LAP_REPORT_COLUMN_GAP = "  "
+LAP_TIME_COLUMN_MIN_WIDTH = 8
+OUT_LAP_LABEL = "out lap"
+HOT_LAP_LABEL = "hot lap"
+IN_LAP_LABEL = "in lap"
+
+
+def _lap_report_row(label, start_seconds):
+    if label in (OUT_LAP_LABEL, IN_LAP_LABEL):
+        return label, "", start_seconds
+    return HOT_LAP_LABEL, label, start_seconds
+
+
+def _time_index_parts(start_seconds):
+    seconds_text = f"{start_seconds:.3f}"
+    total_milliseconds = int(seconds_text.replace(".", ""))
+    minutes, remainder_milliseconds = divmod(total_milliseconds, 60_000)
+    seconds, milliseconds = divmod(remainder_milliseconds, 1000)
+    return minutes, seconds, milliseconds, seconds_text
+
+
+def format_time_index(start_seconds, minute_width, seconds_width):
+    minutes, seconds, milliseconds, seconds_text = _time_index_parts(start_seconds)
+    return (
+        f"{minutes:>{minute_width}}:{seconds:02d}.{milliseconds:03d} "
+        f"({seconds_text:>{seconds_width}})"
+    )
+
+
+def format_lap_report(entries, garage_exit_count):
+    rows = [_lap_report_row(label, start_seconds) for label, start_seconds in entries]
+    type_width = max(len(OUT_LAP_LABEL), len(HOT_LAP_LABEL), len(IN_LAP_LABEL))
+    time_width = LAP_TIME_COLUMN_MIN_WIDTH
+    minute_width = 0
+    seconds_width = 0
+    for _, lap_time, start_seconds in rows:
+        time_width = max(time_width, len(lap_time))
+        minutes, _, _, seconds_text = _time_index_parts(start_seconds)
+        minute_width = max(minute_width, len(str(minutes)))
+        seconds_width = max(seconds_width, len(seconds_text))
+    gap = LAP_REPORT_COLUMN_GAP
+    lines = [
+        f"{lap_type:<{type_width}}{gap}{lap_time:<{time_width}}{gap}"
+        f"{format_time_index(start_seconds, minute_width, seconds_width)}"
+        for lap_type, lap_time, start_seconds in rows
+    ]
+    lines.append(f"garage exits: {garage_exit_count}")
+    return lines
+
+
 def crop_showinfo_filter(crop):
     crop_width, crop_height, crop_x, crop_y = crop
     return f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y},showinfo"
@@ -451,41 +686,147 @@ def lap_start_in_bracket(video_path, bracket, crop, letter_box, digit_box):
     return held_lap_start_time(zip(times, digits, strict=True), new_digit)
 
 
-def refine_lap_brackets(video_path, brackets, crop, letter_box, digit_box, duration, progress):
-    bracket_count = len(brackets)
-    if bracket_count == 0:
+def hud_keyframe_filter(lap_crop, timer_crop):
+    lap_width, lap_height, lap_x, lap_y = lap_crop
+    timer_width, timer_height, timer_x, timer_y = timer_crop
+    stacked_height = max(lap_height, timer_height)
+    return (
+        "split[lap][timer];"
+        f"[lap]crop={lap_width}:{lap_height}:{lap_x}:{lap_y},"
+        f"pad={lap_width}:{stacked_height}:0:0[lap_out];"
+        f"[timer]crop={timer_width}:{timer_height}:{timer_x}:{timer_y},"
+        f"pad={timer_width}:{stacked_height}:0:0[timer_out];"
+        "[lap_out][timer_out]hstack,showinfo"
+    )
+
+
+def split_hud_frame(frame, lap_crop, timer_crop):
+    lap_width, lap_height, _, _ = lap_crop
+    timer_width, timer_height, _, _ = timer_crop
+    lap = frame[:lap_height, :lap_width]
+    timer = frame[:timer_height, lap_width:lap_width + timer_width]
+    return lap, timer
+
+
+def read_hud_keyframe_samples(
+    video_path, lap_crop, timer_crop, letter_box, digit_box, progress, keyframe_count,
+):
+    lap_width, lap_height, _, _ = lap_crop
+    timer_width, timer_height, _, _ = timer_crop
+    stacked_height = max(lap_height, timer_height)
+    stacked_width = lap_width + timer_width
+    command = [
+        "ffmpeg", "-hide_banner", "-loglevel", "info",
+        "-skip_frame", "nokey",
+        "-i", video_path,
+        "-vf", hud_keyframe_filter(lap_crop, timer_crop),
+        "-vsync", "vfr",
+        "-f", "rawvideo",
+        "-pix_fmt", "bgr24",
+        "pipe:1",
+    ]
+    raw_frames, pts_times = read_rawvideo_crop(
+        command, (stacked_width, stacked_height, 0, 0), video_path, progress, keyframe_count,
+    )
+    digit_samples = []
+    timer_samples = []
+    for index, data in enumerate(raw_frames):
+        frame = np.frombuffer(data, dtype=np.uint8).reshape((stacked_height, stacked_width, 3))
+        lap, timer = split_hud_frame(frame, lap_crop, timer_crop)
+        digit = classify_lap_image(np.ascontiguousarray(lap), letter_box, digit_box)
+        state = timer_glyph_state(cv2.cvtColor(np.ascontiguousarray(timer), cv2.COLOR_BGR2GRAY))
+        digit_samples.append((pts_times[index], digit))
+        timer_samples.append((pts_times[index], state))
+        raw_frames[index] = None
+    return digit_samples, timer_samples
+
+
+def timer_states_from_raw(raw_frames, crop):
+    crop_width, crop_height, _, _ = crop
+    states = []
+    for index, data in enumerate(raw_frames):
+        image = np.frombuffer(data, dtype=np.uint8).reshape((crop_height, crop_width, 3))
+        states.append(timer_glyph_state(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)))
+        raw_frames[index] = None
+    return states
+
+
+def garage_exit_in_bracket(video_path, bracket, crop, letter_box, digit_box):
+    previous_time, appearance_time = bracket
+    raw_frames, times = read_span_crop(video_path, crop, previous_time, appearance_time)
+    digits = classify_raw_frames(raw_frames, crop, letter_box, digit_box)
+    return first_held_time(
+        zip(times, digits, strict=True),
+        lambda digit: digit is not None,
+        LAP_DIGIT_HOLD_FRAMES,
+    )
+
+
+def timer_restart_time(frames):
+    has_seen_long = False
+    run_length = 0
+    run_start = None
+    for time_seconds, state in frames:
+        if state == "long":
+            has_seen_long = True
+            run_length = 0
+            continue
+        if not has_seen_long or state != "short":
+            run_length = 0
+            continue
+        if run_length == 0:
+            run_start = time_seconds
+        run_length += 1
+        if run_length >= LAP_DIGIT_HOLD_FRAMES:
+            return run_start
+    return None
+
+
+def in_lap_in_bracket(video_path, bracket, crop):
+    previous_time, short_time = bracket
+    raw_frames, times = read_span_crop(video_path, crop, previous_time, short_time)
+    states = timer_states_from_raw(raw_frames, crop)
+    return timer_restart_time(zip(times, states, strict=True))
+
+
+def kept_times(starts, duration):
+    kept = []
+    for start in starts:
+        if start is None or start < 0:
+            continue
+        if duration is not None and start > duration:
+            continue
+        kept.append(start)
+    kept.sort()
+    return kept
+
+
+def map_refinements(jobs, progress):
+    job_count = len(jobs)
+    if job_count == 0:
         return []
     done_count = 0
     done_lock = threading.Lock()
 
-    def refine_one(bracket):
+    def run_one(job):
         nonlocal done_count
-        start = lap_start_in_bracket(video_path, bracket, crop, letter_box, digit_box)
+        result = job()
         with done_lock:
             done_count += 1
-            finished = done_count
             if progress is not None:
-                progress(index_progress_message(finished, bracket_count))
-        return start
+                progress(index_progress_message(done_count, job_count))
+        return result
 
-    starts = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=LAP_REFINE_WORKERS) as executor:
-        futures = [executor.submit(refine_one, bracket) for bracket in brackets]
-        for future in futures:
-            start = future.result()
-            if start is None or start < 0:
-                continue
-            if duration is not None and start > duration:
-                continue
-            starts.append(start)
-    starts.sort()
-    return starts
+        futures = [executor.submit(run_one, job) for job in jobs]
+        return [future.result() for future in futures]
 
 
-def index_lap_starts(video_path, progress=None):
-    """Return lap-start times in seconds. `progress` receives status strings."""
+def index_lap_session(video_path, progress=None):
+    """Return flying-lap starts and the console classification lines."""
     frame_width, frame_height, duration = probe_video_geometry(video_path)
-    crop = lap_crop_for_frame(frame_width, frame_height)
+    lap_crop = lap_crop_for_frame(frame_width, frame_height)
+    timer_crop = timer_crop_for_frame(frame_width, frame_height)
     letter_box = scale_reference_box(
         LAP_LETTER_X, LAP_LETTER_Y, LAP_LETTER_WIDTH, LAP_LETTER_HEIGHT, frame_width, frame_height,
     )
@@ -493,12 +834,40 @@ def index_lap_starts(video_path, progress=None):
         LAP_DIGIT_X, LAP_DIGIT_Y, LAP_DIGIT_WIDTH, LAP_DIGIT_HEIGHT, frame_width, frame_height,
     )
     keyframe_count = count_keyframes(video_path)
-    raw_frames, pts_times = read_keyframe_crop(video_path, crop, progress, keyframe_count)
-    samples = lap_digit_samples(raw_frames, pts_times, crop, letter_box, digit_box)
-    brackets = lap_brackets_from_digits(samples)
-    return refine_lap_brackets(
-        video_path, brackets, crop, letter_box, digit_box, duration, progress,
+    digit_samples, timer_samples = read_hud_keyframe_samples(
+        video_path, lap_crop, timer_crop, letter_box, digit_box, progress, keyframe_count,
     )
+    flying_brackets = lap_brackets_from_digits(digit_samples)
+    paired = [
+        (time_seconds, digit, state)
+        for (time_seconds, digit), (_timer_time, state) in zip(digit_samples, timer_samples, strict=True)
+    ]
+    garage_brackets = garage_exit_brackets(paired)
+    in_brackets = in_lap_brackets(timer_samples, flying_brackets)
+    flying_jobs = [
+        lambda bracket=bracket: lap_start_in_bracket(
+            video_path, bracket, lap_crop, letter_box, digit_box,
+        )
+        for bracket in flying_brackets
+    ]
+    garage_jobs = [
+        lambda bracket=bracket: garage_exit_in_bracket(
+            video_path, bracket, lap_crop, letter_box, digit_box,
+        )
+        for bracket in garage_brackets
+    ]
+    in_jobs = [
+        lambda bracket=bracket: in_lap_in_bracket(video_path, bracket, timer_crop)
+        for bracket in in_brackets
+    ]
+    refined = map_refinements(flying_jobs + garage_jobs + in_jobs, progress)
+    flying_count = len(flying_jobs)
+    garage_count = len(garage_jobs)
+    flying_starts = kept_times(refined[:flying_count], duration)
+    garage_exits = kept_times(refined[flying_count:flying_count + garage_count], duration)
+    in_laps = kept_times(refined[flying_count + garage_count:], duration)
+    entries = classify_finished_laps(flying_starts, garage_exits, in_laps)
+    return flying_starts, format_lap_report(entries, len(garage_exits))
 
 
 def failure_message(error, video_path):
@@ -508,14 +877,20 @@ def failure_message(error, video_path):
     return message
 
 
+def print_lap_report(report_lines):
+    for line in report_lines:
+        print(line, file=sys.stderr)
+
+
 def print_lap_starts(video_path):
     started = time.perf_counter()
     try:
-        starts = index_lap_starts(video_path)
+        starts, report_lines = index_lap_session(video_path)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print(failure_message(error, video_path), file=sys.stderr)
         raise SystemExit(1) from error
     elapsed = time.perf_counter() - started
+    print_lap_report(report_lines)
     for start in starts:
         print(f"{start:.3f}")
     print(f"indexed {len(starts)} laps in {elapsed:.1f} s", file=sys.stderr)
@@ -969,10 +1344,11 @@ class VideoFrameExtractor(tk.Tk):
             self.lap_index_queue.put(("progress", message))
 
         try:
-            starts = index_lap_starts(video_path, progress=progress)
+            starts, report_lines = index_lap_session(video_path, progress=progress)
         except Exception as error:
             self.lap_index_queue.put(("error", failure_message(error, video_path)))
             return
+        print_lap_report(report_lines)
         self.lap_index_queue.put(("done", starts))
 
     def poll_lap_index(self):

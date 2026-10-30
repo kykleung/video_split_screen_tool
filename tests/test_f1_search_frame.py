@@ -1,3 +1,5 @@
+import numpy as np
+
 import f1_search_frame as search
 
 
@@ -169,6 +171,150 @@ def test_lap_letter_presence():
 
 def test_lap_crop_at_reference_size():
     assert search.lap_crop_for_frame(1920, 1080) == (80, 28, 164, 128)
+
+
+def blank_timer():
+    return np.zeros((search.TIMER_CROP_HEIGHT, search.TIMER_CROP_WIDTH), dtype=np.uint8)
+
+
+def test_timer_glyph_states():
+    dashes = blank_timer()
+    dashes[10, 47:81] = 255
+    assert search.timer_glyph_state(dashes) == "dashes"
+
+    long_time = blank_timer()
+    long_time[3:15, 10:30] = 255
+    assert search.timer_glyph_state(long_time) == "long"
+
+    short_time = blank_timer()
+    short_time[3:15, 43:58] = 255
+    assert search.timer_glyph_state(short_time) == "short"
+
+    mid_time = blank_timer()
+    mid_time[3:15, 29:47] = 255
+    assert search.timer_glyph_state(mid_time) == "mid"
+
+    assert search.timer_glyph_state(blank_timer()) == "absent"
+    assert search.timer_glyph_state(np.full_like(blank_timer(), 255)) == "other"
+
+
+def test_garage_exit_brackets_ignore_short_gaps_and_a_running_clock():
+    samples = [
+        (93.594, None, "absent"),
+        (99.099, 0, "dashes"),
+        (104.605, 0, "dashes"),
+        (110.110, None, "running"),
+        (115.615, 0, "running"),
+        (200.0, None, "absent"),
+        (950.0, None, "absent"),
+        (952.452, 2, "dashes"),
+        (1360.0, None, "absent"),
+        (1365.364, 0, "running"),
+    ]
+    assert search.garage_exit_brackets(samples) == [(93.594, 99.099), (950.0, 952.452)]
+
+
+def test_in_lap_brackets_skip_the_flying_lap_clock_reveal():
+    flying = [(335.836, 368.868, 3)]
+    samples = [
+        (368.868, "long"),
+        (374.374, "short"),
+        (451.451, "long"),
+        (456.957, "short"),
+    ]
+    assert search.is_flying_timer_reveal(374.374, flying) is True
+    assert search.is_flying_timer_reveal(456.957, flying) is False
+    assert search.in_lap_brackets(samples, flying) == [(451.451, 456.957)]
+    assert search.in_lap_brackets([(90.0, "dashes"), (99.0, "short")], flying) == []
+
+
+def test_timer_restart_needs_a_five_frame_hold_after_a_long_clock():
+    frames = [(1.0, "long")]
+    frames.extend((1.0 + index / 50, "short") for index in range(1, 5))
+    assert search.timer_restart_time(frames) is None
+    frames.append((1.1, "short"))
+    assert search.timer_restart_time(frames) == 1.0 + 1 / 50
+    assert search.timer_restart_time([(0.0, "short")] * 6) is None
+
+
+def test_hot_lap_time_format():
+    assert search.format_hot_lap_time(76.510) == "1:16.510"
+    assert search.format_hot_lap_time(94.011) == "1:34.011"
+    assert search.format_hot_lap_time(87.737) == "1:27.737"
+    assert search.format_hot_lap_time(45.5) == "45.500"
+    assert search.format_hot_lap_time(60) == "1:00.000"
+
+
+def test_first_stint_classification_keeps_the_in_lap_off_the_flying_starts():
+    flying = [194.277, 270.787, 364.798]
+    entries = search.classify_finished_laps(flying, [95.762], [452.535])
+    assert entries == [
+        ("out lap", 95.762),
+        ("1:16.510", 194.277),
+        ("1:34.011", 270.787),
+        ("1:27.737", 364.798),
+        ("in lap", 452.535),
+    ]
+    assert search.format_lap_report(entries, 1) == [
+        "out lap            1:35.762 ( 95.762)",
+        "hot lap  1:16.510  3:14.277 (194.277)",
+        "hot lap  1:34.011  4:30.787 (270.787)",
+        "hot lap  1:27.737  6:04.798 (364.798)",
+        "in lap             7:32.535 (452.535)",
+        "garage exits: 1",
+    ]
+    assert 452.535 not in flying
+
+
+def test_lap_report_time_column_stays_blank_and_keeps_the_index_aligned():
+    short_times = search.format_lap_report([("out lap", 1.0), ("45.500", 2.5), ("in lap", 3.0)], 1)
+    assert short_times == [
+        "out lap            0:01.000 (1.000)",
+        "hot lap  45.500    0:02.500 (2.500)",
+        "in lap             0:03.000 (3.000)",
+        "garage exits: 1",
+    ]
+    long_time = search.format_lap_report([("out lap", 1.0), ("10:00.000", 2.0), ("in lap", 3.0)], 0)
+    assert long_time == [
+        "out lap             0:01.000 (1.000)",
+        "hot lap  10:00.000  0:02.000 (2.000)",
+        "in lap              0:03.000 (3.000)",
+        "garage exits: 0",
+    ]
+    assert (
+        long_time[0].index("0:01.000 (1.000)")
+        == long_time[1].index("0:02.000 (2.000)")
+        == long_time[2].index("0:03.000 (3.000)")
+    )
+
+
+def test_lap_report_with_no_finished_laps_prints_only_the_garage_count():
+    assert search.format_lap_report([], 0) == ["garage exits: 0"]
+
+
+def test_hot_lap_time_follows_the_printed_time_indexes():
+    start = 364.7976
+    end = 452.5354
+    assert f"{start:.3f}" == "364.798"
+    assert f"{end:.3f}" == "452.535"
+    assert search.classify_finished_laps([start], [], [end]) == [
+        ("1:27.737", start),
+        ("in lap", end),
+    ]
+
+
+def test_later_stint_can_open_on_lap_two():
+    entries = search.classify_finished_laps([1044.860], [950.0], [1135.085])
+    assert entries == [
+        ("out lap", 950.0),
+        ("1:30.225", 1044.860),
+        ("in lap", 1135.085),
+    ]
+
+
+def test_an_unfinished_hot_lap_is_omitted():
+    entries = search.classify_finished_laps([3075.472], [2980.0], [])
+    assert entries == [("out lap", 2980.0)]
 
 
 def test_showinfo_pts_times_ignores_other_lines():
