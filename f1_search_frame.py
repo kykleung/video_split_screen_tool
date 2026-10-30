@@ -548,6 +548,8 @@ LAP_TIME_COLUMN_MIN_WIDTH = 8
 OUT_LAP_LABEL = "out lap"
 HOT_LAP_LABEL = "hot lap"
 IN_LAP_LABEL = "in lap"
+FASTEST_HOT_LAP_COLOUR = "\033[1;38;5;226m"
+ANSI_RESET = "\033[0m"
 
 
 def _lap_report_row(label, start_seconds):
@@ -572,24 +574,46 @@ def format_time_index(start_seconds, minute_width, seconds_width):
     )
 
 
-def format_lap_report(entries, garage_exit_count):
+def lap_time_milliseconds(lap_time):
+    if ":" in lap_time:
+        minutes_text, seconds_text = lap_time.split(":", 1)
+    else:
+        minutes_text, seconds_text = "0", lap_time
+    seconds_text, milliseconds_text = seconds_text.split(".", 1)
+    return int(minutes_text) * 60_000 + int(seconds_text) * 1000 + int(milliseconds_text)
+
+
+def colour_fastest_hot_lap(line, lap_type, lap_time, fastest_milliseconds):
+    if lap_type != HOT_LAP_LABEL or not lap_time:
+        return line
+    if lap_time_milliseconds(lap_time) != fastest_milliseconds:
+        return line
+    return f"{FASTEST_HOT_LAP_COLOUR}{line}{ANSI_RESET}"
+
+
+def format_lap_report(entries):
     rows = [_lap_report_row(label, start_seconds) for label, start_seconds in entries]
     type_width = max(len(OUT_LAP_LABEL), len(HOT_LAP_LABEL), len(IN_LAP_LABEL))
     time_width = LAP_TIME_COLUMN_MIN_WIDTH
     minute_width = 0
     seconds_width = 0
-    for _, lap_time, start_seconds in rows:
+    hot_lap_milliseconds = []
+    for lap_type, lap_time, start_seconds in rows:
         time_width = max(time_width, len(lap_time))
         minutes, _, _, seconds_text = _time_index_parts(start_seconds)
         minute_width = max(minute_width, len(str(minutes)))
         seconds_width = max(seconds_width, len(seconds_text))
+        if lap_type == HOT_LAP_LABEL and lap_time:
+            hot_lap_milliseconds.append(lap_time_milliseconds(lap_time))
+    fastest_milliseconds = min(hot_lap_milliseconds) if hot_lap_milliseconds else None
     gap = LAP_REPORT_COLUMN_GAP
-    lines = [
-        f"{lap_type:<{type_width}}{gap}{lap_time:<{time_width}}{gap}"
-        f"{format_time_index(start_seconds, minute_width, seconds_width)}"
-        for lap_type, lap_time, start_seconds in rows
-    ]
-    lines.append(f"garage exits: {garage_exit_count}")
+    lines = []
+    for lap_type, lap_time, start_seconds in rows:
+        line = (
+            f"{lap_type:<{type_width}}{gap}{lap_time:<{time_width}}{gap}"
+            f"{format_time_index(start_seconds, minute_width, seconds_width)}"
+        )
+        lines.append(colour_fastest_hot_lap(line, lap_type, lap_time, fastest_milliseconds))
     return lines
 
 
@@ -867,7 +891,7 @@ def index_lap_session(video_path, progress=None):
     garage_exits = kept_times(refined[flying_count:flying_count + garage_count], duration)
     in_laps = kept_times(refined[flying_count + garage_count:], duration)
     entries = classify_finished_laps(flying_starts, garage_exits, in_laps)
-    return flying_starts, format_lap_report(entries, len(garage_exits))
+    return flying_starts, format_lap_report(entries)
 
 
 def failure_message(error, video_path):

@@ -245,6 +245,14 @@ def test_hot_lap_time_format():
     assert search.format_hot_lap_time(60) == "1:00.000"
 
 
+def coloured(line):
+    return f"{search.FASTEST_HOT_LAP_COLOUR}{line}{search.ANSI_RESET}"
+
+
+def visible(line):
+    return line.replace(search.FASTEST_HOT_LAP_COLOUR, "").replace(search.ANSI_RESET, "")
+
+
 def test_first_stint_classification_keeps_the_in_lap_off_the_flying_starts():
     flying = [194.277, 270.787, 364.798]
     entries = search.classify_finished_laps(flying, [95.762], [452.535])
@@ -255,41 +263,46 @@ def test_first_stint_classification_keeps_the_in_lap_off_the_flying_starts():
         ("1:27.737", 364.798),
         ("in lap", 452.535),
     ]
-    assert search.format_lap_report(entries, 1) == [
+    assert search.format_lap_report(entries) == [
         "out lap            1:35.762 ( 95.762)",
-        "hot lap  1:16.510  3:14.277 (194.277)",
+        coloured("hot lap  1:16.510  3:14.277 (194.277)"),
         "hot lap  1:34.011  4:30.787 (270.787)",
         "hot lap  1:27.737  6:04.798 (364.798)",
         "in lap             7:32.535 (452.535)",
-        "garage exits: 1",
     ]
     assert 452.535 not in flying
 
 
 def test_lap_report_time_column_stays_blank_and_keeps_the_index_aligned():
-    short_times = search.format_lap_report([("out lap", 1.0), ("45.500", 2.5), ("in lap", 3.0)], 1)
+    short_times = search.format_lap_report([("out lap", 1.0), ("45.500", 2.5), ("in lap", 3.0)])
     assert short_times == [
         "out lap            0:01.000 (1.000)",
-        "hot lap  45.500    0:02.500 (2.500)",
+        coloured("hot lap  45.500    0:02.500 (2.500)"),
         "in lap             0:03.000 (3.000)",
-        "garage exits: 1",
     ]
-    long_time = search.format_lap_report([("out lap", 1.0), ("10:00.000", 2.0), ("in lap", 3.0)], 0)
+    long_time = search.format_lap_report([("out lap", 1.0), ("10:00.000", 2.0), ("in lap", 3.0)])
     assert long_time == [
         "out lap             0:01.000 (1.000)",
-        "hot lap  10:00.000  0:02.000 (2.000)",
+        coloured("hot lap  10:00.000  0:02.000 (2.000)"),
         "in lap              0:03.000 (3.000)",
-        "garage exits: 0",
     ]
+    visible_lines = [visible(line) for line in long_time]
     assert (
-        long_time[0].index("0:01.000 (1.000)")
-        == long_time[1].index("0:02.000 (2.000)")
-        == long_time[2].index("0:03.000 (3.000)")
+        visible_lines[0].index("0:01.000 (1.000)")
+        == visible_lines[1].index("0:02.000 (2.000)")
+        == visible_lines[2].index("0:03.000 (3.000)")
     )
 
 
-def test_lap_report_with_no_finished_laps_prints_only_the_garage_count():
-    assert search.format_lap_report([], 0) == ["garage exits: 0"]
+def test_tied_fastest_hot_laps_are_both_coloured():
+    report = search.format_lap_report([("1:16.510", 10.0), ("1:20.000", 90.0), ("1:16.510", 180.0)])
+    assert report[0] == coloured("hot lap  1:16.510  0:10.000 ( 10.000)")
+    assert report[1] == "hot lap  1:20.000  1:30.000 ( 90.000)"
+    assert report[2] == coloured("hot lap  1:16.510  3:00.000 (180.000)")
+
+
+def test_lap_report_with_no_finished_laps_is_empty():
+    assert search.format_lap_report([]) == []
 
 
 def test_hot_lap_time_follows_the_printed_time_indexes():
