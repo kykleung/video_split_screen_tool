@@ -9,7 +9,7 @@ The time, in one recording, of the shared moment. One per file. Found by narrowi
 _Avoid_: start time, matching frame, lights-out time
 
 **Search window**:
-One running copy of `f1_23_search_frame.py` on one recording.
+One running copy of `f1_search_frame.py` on one recording.
 _Avoid_: player, preview
 
 **Split-screen**:

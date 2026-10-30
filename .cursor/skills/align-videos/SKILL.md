@@ -1,7 +1,7 @@
 ---
 name: align-videos
 description: >-
-  Open f1_23_search_frame.py so a person can narrow down a sync timestamp.
+  Open f1_search_frame.py so a person can narrow down a sync timestamp.
   Use when finding lights-out, editing mask.png, or changing that script.
 ---
 
@@ -14,8 +14,8 @@ The user finds the sync time by hand in two GUI windows. Leave `f1_23_search_sta
 When asked to open the footage, background one process per file:
 
 ```bash
-python f1_23_search_frame.py jackey.mp4 &
-python f1_23_search_frame.py keith.mp4 &
+python f1_search_frame.py jackey.mp4 &
+python f1_search_frame.py keith.mp4 &
 ```
 
 Use the paths the user gave. Stop after the windows are up. The timestamp comes from the user narrowing down inside each window, not from the agent.

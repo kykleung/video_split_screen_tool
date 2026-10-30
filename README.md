@@ -17,9 +17,21 @@ ffmpeg, ffprobe, and yt-dlp need to be on `PATH`.
 1. Open one search window per recording and narrow down the shared moment in each:
 
 ```bash
-python f1_23_search_frame.py jackey.mp4 &
-python f1_23_search_frame.py keith.mp4 &
+python f1_search_frame.py jackey.mp4 &
+python f1_search_frame.py keith.mp4 &
 ```
+
+### Lap starts
+
+In each search window, **Index laps** finds the flying-lap starts. **Prev lap start** and **Next lap start** jump to them. `--index-laps` prints the same times, one per line, and does not open the window:
+
+```bash
+python f1_search_frame.py jackey.mp4 --index-laps
+```
+
+A lap start is the frame where the top-left `LAP` number goes up by one and holds. `0` is the out-lap (a slashed zero). `0` to `1` is the first flying lap. On the Imola qualifying recording the top-right timer restarts at 452.5 s while the tower stays on `LAP 3`, because the car is returning to the pits. That time is not a lap start.
+
+Indexing reads keyframes of that label, then decodes only the few seconds around each change. A full qualifying file finishes in a few seconds.
 
 2. Encode with the left file at 0 and the right file at `right_sync - left_sync`. Typical flags are `--stereo-pan` and `--auto-balance`.
 

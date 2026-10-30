@@ -8,7 +8,7 @@ Coding practices: `.cursor/rules/coding-practices.mdc` (attached when editing Py
 
 Day-to-day work stays in these two files:
 
-- `f1_23_search_frame.py` is the GUI used to narrow down a sync timestamp. The user opens two copies, one per recording.
+- `f1_search_frame.py` is the GUI used to narrow down a sync timestamp. The user opens two copies, one per recording.
 - `f1_create_split_screen_video.py` encodes the side-by-side video. The user runs it by hand after those timestamps are known.
 
 Other Python files in the repo (`f1_23_search_start_frame.py`, `f1_23_search_matching_frame.py`, `f1_23_create_image_mask.py`, `f1_23_create_split_screen_video.py`) are older. Leave them alone unless the user names one. `yt-dl.bash` downloads a source with yt-dlp (`299+251`, then `232+234`, then `136+251`).
@@ -20,8 +20,8 @@ The user finds the sync time. Do not launch the GUIs or invent timestamps.
 1. Two search windows, backgrounded, one for each recording:
 
 ```bash
-python f1_23_search_frame.py jackey.mp4 &
-python f1_23_search_frame.py keith.mp4 &
+python f1_search_frame.py jackey.mp4 &
+python f1_search_frame.py keith.mp4 &
 ```
 
 2. In each window, narrow down the shared moment (lights out). That yields one timestamp per file.

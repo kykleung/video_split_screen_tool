@@ -30,7 +30,7 @@ Adapted from igloo's C++ practices for this script repo.
 - Parse arguments with argparse under `if __name__ == "__main__"`, and keep the work in functions that take those values as parameters.
 - Pass paths in. `mask.png` and `reference_image.jpg` may stay as defaults for the lights-out tools. New functions take those paths as arguments.
 - Call ffmpeg, ffprobe, and yt-dlp with a subprocess argument list, `check=True`, and `text=True`. Leave `shell` at its default.
-- The scripts in use are `f1_23_search_frame.py` and `f1_create_split_screen_video.py`. Sync-frame edits go in the first. Side-by-side encoding goes in the second. Leave the other `f1_23_*.py` files unchanged unless the user names one.
+- The scripts in use are `f1_search_frame.py` and `f1_create_split_screen_video.py`. Sync-frame edits go in the first. Side-by-side encoding goes in the second. Leave the other `f1_23_*.py` files unchanged unless the user names one.
 - Use tkinter only when a person has to click. Batch work stays headless.
 - Keep the picture contract: centre 75% of each frame, scale to 960 wide, pad to 960×1080, stack to 1920×1080.
 
