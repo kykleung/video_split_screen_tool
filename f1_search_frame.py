@@ -2,6 +2,7 @@ import argparse
 import concurrent.futures
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -58,6 +59,18 @@ TIMER_DASH_HEIGHT_MAX = 8
 TIMER_LONG_LEFT_MAX = 16
 TIMER_SHORT_LEFT_MIN = 40
 TIMER_REVEAL_SECONDS = 20.0
+OVERLAY_TIME_CROP_X = 1680
+OVERLAY_TIME_CROP_Y = 70
+OVERLAY_TIME_CROP_WIDTH = 220
+OVERLAY_TIME_CROP_HEIGHT = 40
+OVERLAY_TIME_THRESHOLD = 180
+OVERLAY_TIME_SCALE = 4
+OVERLAY_TIME_LOOKBACK_SECONDS = 0.25
+OVERLAY_TIME_LOOKAHEAD_SECONDS = 0.05
+OVERLAY_TIME_TOLERANCE_MS = 80
+OVERLAY_TIME_OCR_LIMIT = 6
+OVERLAY_TIME_INK_MIN = 150
+OVERLAY_TIME_PATTERN = re.compile(r"^(\d):(\d{2})\.(\d{3})\d?$")
 
 LAP_DIGIT_TEMPLATE_ROWS = {
     0: (
@@ -438,6 +451,14 @@ def timer_crop_for_frame(frame_width, frame_height):
     return width, height, x, y
 
 
+def overlay_time_crop_for_frame(frame_width, frame_height):
+    x = scale_reference_px(OVERLAY_TIME_CROP_X, frame_width, REFERENCE_FRAME_WIDTH)
+    y = scale_reference_px(OVERLAY_TIME_CROP_Y, frame_height, REFERENCE_FRAME_HEIGHT)
+    width = even_length(scale_reference_px(OVERLAY_TIME_CROP_WIDTH, frame_width, REFERENCE_FRAME_WIDTH))
+    height = even_length(scale_reference_px(OVERLAY_TIME_CROP_HEIGHT, frame_height, REFERENCE_FRAME_HEIGHT))
+    return width, height, x, y
+
+
 def garage_exit_brackets(samples):
     """Return (previous_time, appearance_time) for each out-lap garage exit.
 
@@ -516,13 +537,94 @@ def _next_event_time(events, index, kinds):
     return None
 
 
-def classify_finished_laps(flying_starts, garage_exits, in_lap_starts):
-    """Return (label, start_seconds) for finished out laps, hot laps, and in laps."""
+def lap_events(flying_starts, garage_exits, in_lap_starts):
     kind_order = {"out": 0, "hot": 1, "in": 2}
     events = [(start, "out") for start in garage_exits]
     events.extend((start, "hot") for start in flying_starts)
     events.extend((start, "in") for start in in_lap_starts)
     events.sort(key=lambda item: (item[0], kind_order[item[1]]))
+    return events
+
+
+def hot_lap_spans(flying_starts, garage_exits, in_lap_starts):
+    """Return (start_seconds, end_seconds, video_milliseconds) for each finished hot lap."""
+    events = lap_events(flying_starts, garage_exits, in_lap_starts)
+    spans = []
+    for index, (time_seconds, kind) in enumerate(events):
+        if kind != "hot":
+            continue
+        end = _next_event_time(events, index, {"hot", "in"})
+        if end is None:
+            continue
+        duration_ms = int(round(end * 1000)) - int(round(time_seconds * 1000))
+        if duration_ms <= 0:
+            continue
+        spans.append((time_seconds, end, duration_ms))
+    return spans
+
+
+def parse_overlay_clock(text):
+    match = OVERLAY_TIME_PATTERN.fullmatch(text.strip())
+    if match is None:
+        return None
+    minutes, seconds, milliseconds = (int(group) for group in match.groups()[:3])
+    if seconds >= 60:
+        return None
+    return minutes * 60_000 + seconds * 1000 + milliseconds
+
+
+def match_overlay_to_video(parsed_ms, video_ms):
+    """Keep an overlay read that agrees with the video gap, repairing a 3 read as 4 or 5."""
+    if parsed_ms is None:
+        return None
+    if abs(parsed_ms - video_ms) <= OVERLAY_TIME_TOLERANCE_MS:
+        return parsed_ms
+    minutes, remainder = divmod(parsed_ms, 60_000)
+    seconds, milliseconds = divmod(remainder, 1000)
+    chars = list(f"{minutes}:{seconds:02d}.{milliseconds:03d}")
+    repaired = []
+    for index, char in enumerate(chars):
+        if char not in "45":
+            continue
+        trial = chars.copy()
+        trial[index] = "3"
+        trial_ms = parse_overlay_clock("".join(trial))
+        if trial_ms is not None and abs(trial_ms - video_ms) <= OVERLAY_TIME_TOLERANCE_MS:
+            repaired.append(trial_ms)
+    if len(repaired) == 1:
+        return repaired[0]
+    return None
+
+
+def choose_official_hot_lap_time(ocr_texts, video_ms):
+    matched = []
+    for text in ocr_texts:
+        first = text.strip().split()
+        parsed = parse_overlay_clock(first[0]) if first else None
+        hit = match_overlay_to_video(parsed, video_ms)
+        if hit is not None:
+            matched.append(hit)
+    if not matched:
+        return None
+    counts = {}
+    latest = {}
+    for index, milliseconds in enumerate(matched):
+        counts[milliseconds] = counts.get(milliseconds, 0) + 1
+        latest[milliseconds] = index
+    best_count = max(counts.values())
+    if best_count >= 2:
+        chosen = max(
+            (milliseconds for milliseconds, count in counts.items() if count == best_count),
+            key=lambda milliseconds: latest[milliseconds],
+        )
+    else:
+        chosen = matched[-1]
+    return format_clock_milliseconds(chosen)
+
+
+def classify_finished_laps(flying_starts, garage_exits, in_lap_starts):
+    """Return (label, start_seconds) for finished out laps, hot laps, and in laps."""
+    events = lap_events(flying_starts, garage_exits, in_lap_starts)
     lines = []
     for index, (time_seconds, kind) in enumerate(events):
         if kind == "out":
@@ -806,6 +908,68 @@ def timer_restart_time(frames):
     return None
 
 
+def ocr_overlay_time(bgr, tesseract_path):
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    _, black_on_white = cv2.threshold(gray, OVERLAY_TIME_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+    scaled = cv2.resize(
+        black_on_white, None,
+        fx=OVERLAY_TIME_SCALE, fy=OVERLAY_TIME_SCALE, interpolation=cv2.INTER_CUBIC,
+    )
+    padded = cv2.copyMakeBorder(scaled, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+    ok, encoded = cv2.imencode(".png", padded)
+    if not ok:
+        return ""
+    result = subprocess.run(
+        [
+            tesseract_path, "stdin", "stdout", "--psm", "7", "--oem", "1",
+            "-c", "tessedit_char_whitelist=0123456789:.",
+        ],
+        input=encoded.tobytes(), capture_output=True, check=False,
+    )
+    words = result.stdout.decode("utf-8", errors="replace").split()
+    return words[0] if words else ""
+
+
+def overlay_time_texts(raw_frames, crop, tesseract_path):
+    crop_width, crop_height, _, _ = crop
+    bright_frames = []
+    for data in raw_frames:
+        image = np.frombuffer(data, dtype=np.uint8).reshape((crop_height, crop_width, 3))
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if int(np.count_nonzero(gray > OVERLAY_TIME_THRESHOLD)) < OVERLAY_TIME_INK_MIN:
+            continue
+        bright_frames.append(image.copy())
+    chosen = bright_frames[-OVERLAY_TIME_OCR_LIMIT:]
+    return [ocr_overlay_time(image, tesseract_path) for image in chosen]
+
+
+def official_hot_lap_label(video_path, crop, end_seconds, video_ms, tesseract_path):
+    window_start = max(0.0, end_seconds - OVERLAY_TIME_LOOKBACK_SECONDS)
+    window_end = end_seconds + OVERLAY_TIME_LOOKAHEAD_SECONDS
+    raw_frames, _times = read_span_crop(video_path, crop, window_start, window_end)
+    texts = overlay_time_texts(raw_frames, crop, tesseract_path)
+    return choose_official_hot_lap_time(texts, video_ms)
+
+
+def with_overlay_hot_lap_times(video_path, entries, spans, crop):
+    tesseract_path = shutil.which("tesseract")
+    if tesseract_path is None or not spans:
+        return entries
+    jobs = [
+        lambda start=start, end=end, video_ms=video_ms: (
+            start,
+            official_hot_lap_label(video_path, crop, end, video_ms, tesseract_path),
+        )
+        for start, end, video_ms in spans
+    ]
+    labels = {
+        start: label
+        for start, label in map_refinements(jobs, None)
+        if label is not None
+    }
+    return [(labels.get(start, label), start) for label, start in entries]
+
+
 def in_lap_in_bracket(video_path, bracket, crop):
     previous_time, short_time = bracket
     raw_frames, times = read_span_crop(video_path, crop, previous_time, short_time)
@@ -851,6 +1015,7 @@ def index_lap_session(video_path, progress=None):
     frame_width, frame_height, duration = probe_video_geometry(video_path)
     lap_crop = lap_crop_for_frame(frame_width, frame_height)
     timer_crop = timer_crop_for_frame(frame_width, frame_height)
+    overlay_crop = overlay_time_crop_for_frame(frame_width, frame_height)
     letter_box = scale_reference_box(
         LAP_LETTER_X, LAP_LETTER_Y, LAP_LETTER_WIDTH, LAP_LETTER_HEIGHT, frame_width, frame_height,
     )
@@ -891,6 +1056,8 @@ def index_lap_session(video_path, progress=None):
     garage_exits = kept_times(refined[flying_count:flying_count + garage_count], duration)
     in_laps = kept_times(refined[flying_count + garage_count:], duration)
     entries = classify_finished_laps(flying_starts, garage_exits, in_laps)
+    spans = hot_lap_spans(flying_starts, garage_exits, in_laps)
+    entries = with_overlay_hot_lap_times(video_path, entries, spans, overlay_crop)
     return flying_starts, format_lap_report(entries)
 
 

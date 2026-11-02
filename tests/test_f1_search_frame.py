@@ -245,6 +245,23 @@ def test_hot_lap_time_format():
     assert search.format_hot_lap_time(60) == "1:00.000"
 
 
+def test_overlay_clock_replaces_a_near_video_gap_and_repairs_a_three():
+    video_ms = 75_843
+    assert search.parse_overlay_clock("1:15.840") == 75_840
+    assert search.parse_overlay_clock("1:15.8409") == 75_840
+    assert search.parse_overlay_clock("0.016") is None
+    assert search.match_overlay_to_video(75_840, video_ms) == 75_840
+    assert search.match_overlay_to_video(94_013, 94_011) == 94_013
+    assert search.match_overlay_to_video(114_013, 94_011) == 94_013
+    assert search.match_overlay_to_video(80_000, video_ms) is None
+    assert search.choose_official_hot_lap_time(
+        ["1:13.435", "1:15.840", "1:15.840", "0.016"],
+        video_ms,
+    ) == "1:15.840"
+    assert search.choose_official_hot_lap_time(["1:54.013", "1:54.013"], 94_011) == "1:34.013"
+    assert search.choose_official_hot_lap_time(["0.053", ""], video_ms) is None
+
+
 def coloured(line):
     return f"{search.FASTEST_HOT_LAP_COLOUR}{line}{search.ANSI_RESET}"
 
