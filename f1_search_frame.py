@@ -164,8 +164,8 @@ RACE_FORMATION_MAX_HEIGHT = 16
 RACE_MIN_LAP_READS = 8
 RACE_REFINE_TAIL_SECONDS = 0.25
 RACE_LIGHTS_LOOKAHEAD_SECONDS = 20.0
-RED_LIGHT_REFINE_TAIL_SECONDS = 3.0
-RED_SCAN_STRIDE_SECONDS = 0.5
+RED_LIGHT_LOOKBACK_SECONDS = 4.0
+RED_LIGHT_AFTER_SECONDS = 1.0
 RED_SCORE_CLOSENESS_WEIGHT = 0.4
 RED_SCORE_DOMINANCE_WEIGHT = 0.6
 RED_NEARBY_PENALTY_WEIGHT = 0.35
@@ -1672,24 +1672,14 @@ def red_light_drop(scores):
     return 0, None
 
 
-def read_capture_frame(capture, frame_number):
-    capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-    read_ok, frame = capture.read()
-    if not read_ok:
-        return None
-    return frame
-
-
-def red_sample_frames(start_frame, end_frame, stride_frames):
-    if end_frame <= start_frame:
-        return []
-    frames = list(range(start_frame, end_frame, stride_frames))
-    last_frame = end_frame - 1
-    if frames and frames[-1] != last_frame:
-        frames.append(last_frame)
-    elif not frames:
-        frames.append(last_frame)
-    return frames
+def red_light_search_span(counter_time, clock_start):
+    """Return the short span to score, ending just after the race clock starts."""
+    if clock_start is not None and clock_start > counter_time:
+        return (
+            max(0.0, clock_start - RED_LIGHT_LOOKBACK_SECONDS),
+            clock_start + RED_LIGHT_AFTER_SECONDS,
+        )
+    return counter_time, counter_time + RACE_LIGHTS_LOOKAHEAD_SECONDS
 
 
 def last_red_light_frame(video_path, start_seconds, end_seconds, mask_path, progress=None):
@@ -1709,41 +1699,26 @@ def last_red_light_frame(video_path, start_seconds, end_seconds, mask_path, prog
             return None
         start_frame = min(total_frames, max(0, int(round(start_seconds * fps))))
         end_frame = min(total_frames, max(start_frame + 1, int(round(end_seconds * fps))))
-        refine_end = min(
-            total_frames,
-            int(round((end_seconds + RED_LIGHT_REFINE_TAIL_SECONDS) * fps)),
-        )
-        stride_frames = max(1, int(round(fps * RED_SCAN_STRIDE_SECONDS)))
-        sample_frames = red_sample_frames(start_frame, end_frame, stride_frames)
-        if progress is not None and sample_frames:
-            progress(index_progress_message(0, len(sample_frames), "Finding the red lights"))
-        best_frame = start_frame
-        best_score = -1.0
-        for index, frame_number in enumerate(sample_frames, start=1):
-            frame = read_capture_frame(capture, frame_number)
-            if frame is None:
-                continue
-            score = red_frame_score(frame, mask_pixels, nearby_pixels)
-            if score > best_score:
-                best_score = score
-                best_frame = frame_number
-            if progress is not None and (index % 10 == 0 or index == len(sample_frames)):
-                progress(index_progress_message(index, len(sample_frames), "Finding the red lights"))
-        scores = [best_score]
-        frame_numbers = [best_frame]
-        walk_end = max(refine_end - (best_frame + 1), 1)
-        for offset, frame_number in enumerate(range(best_frame + 1, refine_end), start=1):
-            frame = read_capture_frame(capture, frame_number)
-            if frame is None:
-                continue
+        if not capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame):
+            return None
+        scores = []
+        frame_numbers = []
+        frame_count = end_frame - start_frame
+        if progress is not None:
+            progress(index_progress_message(0, frame_count, "Finding the red lights"))
+        for offset, frame_number in enumerate(range(start_frame, end_frame), start=1):
+            read_ok, frame = capture.read()
+            if not read_ok:
+                break
             scores.append(red_frame_score(frame, mask_pixels, nearby_pixels))
             frame_numbers.append(frame_number)
-            if progress is not None and (offset % 30 == 0 or frame_number == refine_end - 1):
-                progress(index_progress_message(offset, walk_end, "Checking the light drop"))
-            last_lit, first_drop = red_light_drop(scores)
-            if first_drop is not None:
-                return frame_numbers[last_lit], fps
-        return frame_numbers[0], fps
+            if progress is not None and (offset % 30 == 0 or offset == frame_count):
+                progress(index_progress_message(offset, frame_count, "Finding the red lights"))
+        if not scores:
+            return None
+        peak_index = max(range(len(scores)), key=lambda index: scores[index])
+        last_lit, _first_drop = red_light_drop(scores[peak_index:])
+        return frame_numbers[peak_index + last_lit], fps
     finally:
         capture.release()
 
@@ -1761,27 +1736,18 @@ def last_red_light_time(video_path, start_seconds, end_seconds, mask_path, progr
 def shift_race_start_to_lights_out(video_path, events, timer_crop, mask_path=None, progress=None):
     if mask_path is None:
         mask_path = default_mask_path()
-    formation = None
-    for time_seconds, kind in events:
-        if kind == RACE_FORMATION_KIND:
-            formation = time_seconds
-            break
     shifted = []
     for time_seconds, kind in events:
         if kind != 1:
             shifted.append((time_seconds, kind))
             continue
-        search_start = time_seconds
-        if formation is not None and formation < time_seconds:
-            search_start = formation
-        search_end = time_seconds + RACE_LIGHTS_LOOKAHEAD_SECONDS
+        clock_start = race_lights_out_time(video_path, time_seconds, timer_crop)
+        search_start, search_end = red_light_search_span(time_seconds, clock_start)
         red_time = last_red_light_time(video_path, search_start, search_end, mask_path, progress)
-        if red_time is not None and red_time > search_start:
+        if red_time is not None:
             time_seconds = red_time
-        else:
-            lights_out = race_lights_out_time(video_path, time_seconds, timer_crop)
-            if lights_out is not None and lights_out > time_seconds:
-                time_seconds = lights_out
+        elif clock_start is not None and clock_start > time_seconds:
+            time_seconds = clock_start
         shifted.append((time_seconds, kind))
     return shifted
 

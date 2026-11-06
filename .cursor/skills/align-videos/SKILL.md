@@ -32,7 +32,7 @@ A race counter reads `LAP current / total`. The formation lap is the banner `FOR
 
 `mask.png` sits at the repo root. The script scores red inside the mask (closeness to pure red blended with red dominance, minus a nearby-pixel penalty) and can walk forward to the last stable frame before the drop. The drop is 70% of the peak and at least 0.07, held for two frames. Change these thresholds only when editing this script, and update this skill in the same change.
 
-While indexing a race, the red-light scan runs from the formation lap through the grid, so a red transition before the race is outside the search. Lap 1 is that last lit frame.
+While indexing a race, lap 1 is the last frame with the five red lights still lit. The lap clock start is already known, so the score only reads the few seconds just before that.
 
 ## Done
 

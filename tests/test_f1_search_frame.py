@@ -487,6 +487,17 @@ def test_index_progress_names_the_stage():
     assert search.index_progress_message(0, None, "Finding the red lights") == "Finding the red lights…"
 
 
+def test_red_light_search_looks_back_from_the_clock_start():
+    assert search.red_light_search_span(349.5, 355.705) == (
+        355.705 - search.RED_LIGHT_LOOKBACK_SECONDS,
+        355.705 + search.RED_LIGHT_AFTER_SECONDS,
+    )
+    assert search.red_light_search_span(349.5, None) == (
+        349.5,
+        349.5 + search.RACE_LIGHTS_LOOKAHEAD_SECONDS,
+    )
+
+
 def test_red_light_drop_keeps_the_last_lit_frame():
     peak = 0.75
     still_lit = 0.74
