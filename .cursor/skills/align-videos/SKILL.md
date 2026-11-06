@@ -28,6 +28,8 @@ Qualifying is a single `LAP` digit. `0` is the out-lap. A step that holds is a f
 
 A race counter reads `LAP current / total`. The formation lap is the banner `FORMATION LAP`. The banner becomes lap 1 on the grid. Lap 1 in the index is the last frame where the five red lights are still lit. Later steps are the start/finish crossings. The same button handles both. The status line names the step in progress: keyframes, lap changes, the red lights, then lap times. Race-counter crops and digit templates live next to the qualifying ones in `f1_search_frame.py`.
 
+The slider under those buttons scrubs the lap under the playhead, from its start through the frame before the next start. The last lap runs to the end of the video. Indexing enables the slider.
+
 ## Lights-out scoring
 
 `mask.png` sits at the repo root. The script scores red inside the mask (closeness to pure red blended with red dominance, minus a nearby-pixel penalty) and can walk forward to the last stable frame before the drop. The drop is 70% of the peak and at least 0.07, held for two frames. Change these thresholds only when editing this script, and update this skill in the same change.

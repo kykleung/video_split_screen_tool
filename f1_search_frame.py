@@ -43,7 +43,8 @@ LAP_REFINE_WORKERS = 4
 LAP_PTS_ORIGIN_TOLERANCE_SECONDS = 0.1
 INDEX_PROGRESS_STRIDE = 50
 LAP_INDEX_POLL_MS = 100
-WINDOW_CONTROL_HEIGHT = 140
+LAP_TIME_MATCH_EPSILON_SECONDS = 0.0001
+WINDOW_CONTROL_HEIGHT = 176
 WINDOW_MARGIN_LEFT = 40
 WINDOW_MARGIN_TOP = 48
 WINDOW_MARGIN_BOTTOM = 64
@@ -408,6 +409,65 @@ def previous_lap_start(starts, current_seconds, half_frame):
             break
         chosen = start
     return chosen
+
+
+def lap_under_playhead(starts, current_seconds, duration, half_frame=0.0):
+    """Return (lap_index, start_seconds, end_seconds, lap_count) for the playhead.
+
+    lap_index is None before the first start. Each lap runs from its start to
+    the next start, and the last lap runs to duration. A playhead within
+    half_frame before a start still belongs to that lap, so a frame that
+    rounded down from the indexed time stays on it.
+    """
+    if duration <= 0:
+        return None
+    ordered = [start for start in starts if start is not None and 0 <= start < duration]
+    if not ordered:
+        return None
+    lap_count = len(ordered)
+    threshold = current_seconds + half_frame + LAP_TIME_MATCH_EPSILON_SECONDS
+    if threshold < ordered[0]:
+        return None, 0.0, ordered[0], lap_count
+    lap_index = 0
+    for index, start in enumerate(ordered):
+        if start > threshold:
+            break
+        lap_index = index
+    start_seconds = ordered[lap_index]
+    if lap_index + 1 < lap_count:
+        end_seconds = ordered[lap_index + 1]
+    else:
+        end_seconds = duration
+    return lap_index, start_seconds, end_seconds, lap_count
+
+
+def lap_frame_bounds(start_seconds, end_seconds, fps, total_frames):
+    """Return inclusive frame indexes covering [start_seconds, end_seconds)."""
+    if fps <= 0:
+        raise ValueError(f"fps must be positive, got {fps}")
+    if total_frames <= 0:
+        raise ValueError(f"total_frames must be positive, got {total_frames}")
+    start_frame = int(round(start_seconds * fps))
+    end_frame = int(round(end_seconds * fps)) - 1
+    last_frame = total_frames - 1
+    start_frame = min(max(start_frame, 0), last_frame)
+    end_frame = min(max(end_frame, start_frame), last_frame)
+    return start_frame, end_frame
+
+
+def format_scrub_clock(seconds):
+    seconds = max(0.0, float(seconds))
+    minutes = int(seconds // 60)
+    remainder = seconds - minutes * 60
+    return f"{minutes:02d}:{remainder:06.3f}"
+
+
+def lap_scrub_caption(lap_index, lap_count, current_seconds, start_seconds, end_seconds):
+    offset = format_scrub_clock(current_seconds - start_seconds)
+    length = format_scrub_clock(end_seconds - start_seconds)
+    if lap_index is None:
+        return f"Before laps  {offset} / {length}"
+    return f"Lap {lap_index + 1}/{lap_count}  {offset} / {length}"
 
 
 def scale_reference_px(value, frame_size, reference_size):
@@ -1985,6 +2045,8 @@ class VideoFrameExtractor(tk.Tk):
         self.lap_starts = []
         self.has_lap_index = False
         self.is_indexing_laps = False
+        self.is_syncing_slider = False
+        self.lap_slider_bounds = None
         self.lap_index_queue = queue.Queue()
 
         self.canvas = tk.Canvas(self)
@@ -2021,6 +2083,24 @@ class VideoFrameExtractor(tk.Tk):
         btn_next_lap = tk.Button(lap_control_frame, text="Next lap start", command=self.show_next_lap_start)
         btn_next_lap.pack(side=tk.LEFT)
 
+        scrub_frame = tk.Frame(self)
+        scrub_frame.pack(side=tk.TOP, fill=tk.X)
+
+        self.lap_scrub_label = tk.Label(scrub_frame, text="Index laps to scrub", anchor=tk.W, width=36)
+        self.lap_scrub_label.pack(side=tk.LEFT)
+
+        self.lap_slider = tk.Scale(
+            scrub_frame,
+            from_=0,
+            to=1,
+            resolution=1,
+            orient=tk.HORIZONTAL,
+            showvalue=False,
+            state=tk.DISABLED,
+            command=self.on_lap_slider,
+        )
+        self.lap_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
         # Label to display the current frame and time
         self.status_label = Label(self, text="Frame: 0 Time: 0s")
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X, anchor=tk.CENTER)
@@ -2045,6 +2125,7 @@ class VideoFrameExtractor(tk.Tk):
             self.status_label.config(text=f"Frame: {self.current_frame} Time: {time_str} ({time_in_seconds:06.4f}s)")
             self.jump_entry.delete(0, tk.END)
             self.jump_entry.insert(0, time_str)
+            self.sync_lap_slider()
 
     def load_video(self, file_path):
         self.vid_cap = cv2.VideoCapture(file_path)
@@ -2191,6 +2272,7 @@ class VideoFrameExtractor(tk.Tk):
         self.has_lap_index = True
         self.is_indexing_laps = False
         self.index_laps_button.config(state=tk.NORMAL)
+        self.sync_lap_slider()
         if starts:
             self.status_label.config(text=f"Indexed {len(starts)} laps")
         else:
@@ -2200,6 +2282,70 @@ class VideoFrameExtractor(tk.Tk):
         self.is_indexing_laps = False
         self.index_laps_button.config(state=tk.NORMAL)
         messagebox.showerror("Error", message)
+
+    def on_lap_slider(self, value):
+        if self.is_syncing_slider or self.vid_cap is None:
+            return
+        frame_number = int(round(float(value)))
+        if frame_number == self.current_frame:
+            return
+        if not 0 <= frame_number < self.total_frames:
+            return
+        self.current_frame = frame_number
+        self.show_frame()
+
+    def sync_lap_slider(self):
+        if not self.has_lap_index or not self.fps or not self.total_frames:
+            return
+        duration = self.total_frames / self.fps
+        current_seconds = self.current_frame / self.fps
+        placed = lap_under_playhead(
+            self.lap_starts,
+            current_seconds,
+            duration,
+            half_frame=0.5 / self.fps,
+        )
+        if placed is None:
+            self.lap_scrub_label.config(text="No lap to scrub")
+            self.disable_lap_slider()
+            return
+        lap_index, start_seconds, end_seconds, lap_count = placed
+        self.lap_scrub_label.config(text=lap_scrub_caption(
+            lap_index, lap_count, current_seconds, start_seconds, end_seconds,
+        ))
+        start_frame, end_frame = lap_frame_bounds(
+            start_seconds, end_seconds, self.fps, self.total_frames,
+        )
+        self.apply_lap_slider(start_frame, end_frame, self.current_frame)
+
+    def apply_lap_slider(self, start_frame, end_frame, frame_number):
+        end_frame = max(end_frame, start_frame)
+        frame_number = min(max(frame_number, start_frame), end_frame)
+        bounds = (start_frame, end_frame)
+        self.is_syncing_slider = True
+        try:
+            shown = int(round(float(self.lap_slider.get())))
+            if bounds != self.lap_slider_bounds:
+                self.lap_slider.config(
+                    from_=min(start_frame, shown),
+                    to=max(end_frame, shown),
+                    state=tk.NORMAL,
+                )
+                self.lap_slider.set(frame_number)
+                self.lap_slider.config(from_=start_frame, to=end_frame)
+                self.lap_slider_bounds = bounds
+            elif shown != frame_number:
+                self.lap_slider.set(frame_number)
+        finally:
+            self.is_syncing_slider = False
+
+    def disable_lap_slider(self):
+        self.is_syncing_slider = True
+        try:
+            self.lap_slider.config(state=tk.DISABLED)
+            self.lap_slider_bounds = None
+        finally:
+            self.is_syncing_slider = False
 
     def show_next_lap_start(self):
         self.show_lap_start(next_lap_start, "No later lap start")

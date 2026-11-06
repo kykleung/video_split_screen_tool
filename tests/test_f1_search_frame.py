@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 import f1_search_frame as search
 
@@ -81,6 +82,44 @@ def test_lap_navigation_on_a_start_steps_to_the_neighbour():
 def test_lap_navigation_stops_at_the_ends():
     assert search.previous_lap_start(LAP_STARTS, 0, 0.008) is None
     assert search.next_lap_start(LAP_STARTS, 364.798, 0.008) is None
+
+
+def test_lap_under_playhead_spans_the_lap_containing_the_time():
+    assert search.lap_under_playhead(LAP_STARTS, 300, 500) == (1, 270.787, 364.798, 3)
+    assert search.lap_under_playhead(LAP_STARTS, 270.787, 500) == (1, 270.787, 364.798, 3)
+    assert search.lap_under_playhead(LAP_STARTS, 0, 500) == (None, 0.0, 194.277, 3)
+    assert search.lap_under_playhead(LAP_STARTS, 400, 500) == (2, 364.798, 500, 3)
+
+
+def test_lap_under_playhead_keeps_a_rounded_down_start_frame():
+    assert search.lap_under_playhead(LAP_STARTS, 270.783, 500, half_frame=0.008) == (
+        1, 270.787, 364.798, 3,
+    )
+    assert search.lap_under_playhead(LAP_STARTS, 270.783, 500) == (0, 194.277, 270.787, 3)
+
+
+def test_lap_under_playhead_requires_a_start_inside_the_video():
+    assert search.lap_under_playhead([], 10, 500) is None
+    assert search.lap_under_playhead(LAP_STARTS, 10, 0) is None
+    assert search.lap_under_playhead([600], 10, 500) is None
+
+
+def test_lap_frame_bounds_stop_before_the_next_lap():
+    assert search.lap_frame_bounds(10.0, 11.0, 60, 10000) == (600, 659)
+
+
+def test_lap_frame_bounds_keep_a_short_lap_on_one_frame():
+    assert search.lap_frame_bounds(10.0, 10.001, 60, 10000) == (600, 600)
+
+
+def test_lap_frame_bounds_reject_a_non_positive_rate():
+    with pytest.raises(ValueError, match="fps must be positive"):
+        search.lap_frame_bounds(0, 1, 0, 10)
+
+
+def test_lap_scrub_caption_names_the_lap_and_the_offset():
+    assert search.lap_scrub_caption(1, 3, 300, 270.787, 364.798) == "Lap 2/3  00:29.213 / 01:34.011"
+    assert search.lap_scrub_caption(None, 3, 12.5, 0, 194.277) == "Before laps  00:12.500 / 03:14.277"
 
 
 def test_lap_digit_templates_match_themselves_and_stay_apart():
