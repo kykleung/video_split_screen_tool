@@ -44,6 +44,11 @@ LAP_PTS_ORIGIN_TOLERANCE_SECONDS = 0.1
 INDEX_PROGRESS_STRIDE = 50
 LAP_INDEX_POLL_MS = 100
 WINDOW_CONTROL_HEIGHT = 140
+WINDOW_MARGIN_LEFT = 40
+WINDOW_MARGIN_TOP = 48
+WINDOW_MARGIN_BOTTOM = 64
+WINDOW_CASCADE_STEP = 32
+WINDOW_CASCADE_SLOTS = 6
 TIMER_CROP_X = 1740
 TIMER_CROP_Y = 80
 TIMER_CROP_WIDTH = 120
@@ -131,7 +136,260 @@ LAP_DIGIT_TEMPLATE_ROWS = {
     ),
 }
 
+RACE_COUNTER_X = 100
+RACE_COUNTER_Y = 128
+RACE_COUNTER_WIDTH = 220
+RACE_COUNTER_HEIGHT = 28
+RACE_INK_THRESHOLD = 170
+RACE_COMPONENT_MIN_AREA = 8
+RACE_DIGIT_MIN_HEIGHT = 16
+RACE_DIGIT_MIN_WIDTH = 8
+RACE_DIGIT_MAX_WIDTH = 20
+RACE_DIGIT_CANVAS_HEIGHT = 18
+RACE_DIGIT_CANVAS_WIDTH = 20
+RACE_DIGIT_MATCH_MAX_DISTANCE = 44
+RACE_DIGIT_MATCH_MARGIN = 8
+RACE_DIGIT_GAP_MAX = 14
+RACE_SLASH_ZONE_WIDTH = 12
+RACE_SLASH_INK_MIN = 6
+RACE_SLASH_INK_MAX = 30
+RACE_TOTAL_LOOKAHEAD = 48
+RACE_TOTAL_INK_MIN = 20
+RACE_LAP_NUMBER_MAX = 99
+RACE_FORMATION_INK_MIN = 250
+RACE_FORMATION_INK_MAX = 550
+RACE_FORMATION_MIN_WIDTH = 150
+RACE_FORMATION_MIN_HEIGHT = 10
+RACE_FORMATION_MAX_HEIGHT = 16
+RACE_MIN_LAP_READS = 8
+RACE_REFINE_TAIL_SECONDS = 0.25
+RACE_LIGHTS_LOOKAHEAD_SECONDS = 20.0
+RED_LIGHT_REFINE_TAIL_SECONDS = 3.0
+RED_SCAN_STRIDE_SECONDS = 0.5
+RED_SCORE_CLOSENESS_WEIGHT = 0.4
+RED_SCORE_DOMINANCE_WEIGHT = 0.6
+RED_NEARBY_PENALTY_WEIGHT = 0.35
+RED_NEARBY_PENALTY_RADIUS_PX = 10
+RED_DROP_RATIO = 0.70
+RED_DROP_ABSOLUTE = 0.07
+RED_DROP_HOLD_FRAMES = 2
+RACE_FORMATION_KIND = "formation"
+RACE_LAP_KIND = "lap"
+
+RACE_DIGIT_TEMPLATE_ROWS = {
+    0: (
+        ".....#########......",
+        "...#############....",
+        "..##############....",
+        "..#####.....#####...",
+        "..####.......####...",
+        ".#####.......#####..",
+        ".####.......######..",
+        ".####....#########..",
+        ".####...##########..",
+        ".##########...####..",
+        ".#########....####..",
+        ".######.......####..",
+        ".#####........####..",
+        "..####.......####...",
+        "..#####.....#####...",
+        "...#############....",
+        "....############....",
+        ".....#########......",
+    ),
+    1: (
+        "....#######.........",
+        "....########........",
+        "....########........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........####........",
+        "........#####.......",
+        "....############....",
+        "....############....",
+        "....############....",
+    ),
+    2: (
+        "....###########.....",
+        "....#############...",
+        "....#############...",
+        ".............####...",
+        ".............####...",
+        ".............####...",
+        "............#####...",
+        "..........######....",
+        "........#######.....",
+        "......#######.......",
+        ".....######.........",
+        "....#####...........",
+        "....####............",
+        "...#####............",
+        "...#####............",
+        "...##############...",
+        "...##############...",
+        "...##############...",
+    ),
+    3: (
+        "...###########......",
+        "...############.....",
+        "...#############....",
+        "............####....",
+        "............####....",
+        "............####....",
+        "............####....",
+        "....############....",
+        "....###########.....",
+        "....###########.....",
+        "...........#####....",
+        "............####....",
+        "............####....",
+        "............####....",
+        "...........#####....",
+        "...#############....",
+        "...############.....",
+        "...#########........",
+    ),
+    4: (
+        ".........#####......",
+        "........#######.....",
+        ".......########.....",
+        "......##########....",
+        ".....#####..####....",
+        "....#####...####....",
+        "....####....####....",
+        "...####.....####....",
+        "..#####.....####....",
+        ".#####......####....",
+        ".####.......####....",
+        ".####.......####....",
+        ".#################..",
+        ".#################..",
+        "..################..",
+        "............####....",
+        "............####....",
+        "............####....",
+    ),
+    5: (
+        "...##############...",
+        "...##############...",
+        "...##############...",
+        "...####.............",
+        "...####.............",
+        "...####.............",
+        "...####.............",
+        "...############.....",
+        "...#############....",
+        "....############....",
+        "............#####...",
+        ".............####...",
+        ".............####...",
+        "............#####...",
+        "...........######...",
+        "...#############....",
+        "...############.....",
+        "...##########.......",
+    ),
+    6: (
+        "......##########....",
+        "....############....",
+        "...#############....",
+        "...####.............",
+        "..####..............",
+        "..####..............",
+        "..####..............",
+        "..#############.....",
+        "..##############....",
+        "..###############...",
+        "..####.......####...",
+        "..####.......####...",
+        "..####.......####...",
+        "..####.......####...",
+        "..#####.....#####...",
+        "...#############....",
+        "....############....",
+        "......########......",
+    ),
+    7: (
+        "...#############....",
+        "...#############....",
+        "...##############...",
+        "............####....",
+        "............####....",
+        "...........#####....",
+        "...........####.....",
+        "..........#####.....",
+        "..........####......",
+        ".........#####......",
+        ".........####.......",
+        "........####........",
+        "........####........",
+        ".......####.........",
+        "......#####.........",
+        "......####..........",
+        ".....#####..........",
+        ".....####...........",
+    ),
+    8: (
+        "....##########......",
+        "...#############....",
+        "..##############....",
+        "..####......####....",
+        "..####.......###....",
+        "..####.......###....",
+        "..####......####....",
+        "...#############....",
+        "....###########.....",
+        "....###########.....",
+        "..#####.....####....",
+        "..####.......####...",
+        "..####.......####...",
+        "..####.......####...",
+        "..####.......####...",
+        "..###############...",
+        "...#############....",
+        "....##########......",
+    ),
+    9: (
+        ".....#########......",
+        "....############....",
+        "...##############...",
+        "...####......####...",
+        "..#####......####...",
+        "..####.......####...",
+        "..#####......####...",
+        "..#####......####...",
+        "...##############...",
+        "....#############...",
+        ".....############...",
+        ".............####...",
+        ".............####...",
+        ".............####...",
+        "............#####...",
+        "...#############....",
+        "...############.....",
+        "...###########......",
+    ),
+}
+
 SHOWINFO_PTS_PATTERN = re.compile(r"pts_time:(-?[0-9]*\.?[0-9]+)")
+
+
+def window_origin(window_width, window_height, screen_width, screen_height, slot=0):
+    """Return a top-left corner that keeps the window on screen."""
+    step = (slot % WINDOW_CASCADE_SLOTS) * WINDOW_CASCADE_STEP
+    x = WINDOW_MARGIN_LEFT + step
+    y = WINDOW_MARGIN_TOP + step
+    max_x = max(0, screen_width - window_width)
+    max_y = max(0, screen_height - WINDOW_MARGIN_BOTTOM - window_height)
+    return min(max(x, 0), max_x), min(max(y, 0), max_y)
 
 
 def next_lap_start(starts, current_seconds, half_frame):
@@ -236,10 +494,10 @@ def read_exact(stream, size):
     return b"".join(chunks)
 
 
-def index_progress_message(frame_number, keyframe_count):
-    if keyframe_count:
-        return f"Indexing laps… {frame_number}/{keyframe_count}"
-    return f"Indexing laps… {frame_number}"
+def index_progress_message(done, total, stage):
+    if total:
+        return f"{stage}… {done}/{total}"
+    return f"{stage}…"
 
 
 def digit_rows_to_mask(rows):
@@ -257,6 +515,24 @@ def digit_rows_to_mask(rows):
 
 LAP_DIGIT_TEMPLATES = {
     digit: digit_rows_to_mask(rows) for digit, rows in LAP_DIGIT_TEMPLATE_ROWS.items()
+}
+
+
+def rows_to_mask(rows):
+    height = len(rows)
+    width = len(rows[0]) if rows else 0
+    if height == 0 or width == 0:
+        raise ValueError("mask rows are empty")
+    mask = np.empty((height, width), dtype=bool)
+    for row_index, row in enumerate(rows):
+        if len(row) != width:
+            raise ValueError(f"mask row has {len(row)} columns")
+        mask[row_index] = [cell == "#" for cell in row]
+    return mask
+
+
+RACE_DIGIT_TEMPLATES = {
+    digit: rows_to_mask(rows) for digit, rows in RACE_DIGIT_TEMPLATE_ROWS.items()
 }
 
 
@@ -724,7 +1000,7 @@ def crop_showinfo_filter(crop):
     return f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y},showinfo"
 
 
-def read_rawvideo_crop(command, crop, video_path, progress=None, keyframe_count=None):
+def read_rawvideo_crop(command, crop, video_path, progress=None, keyframe_count=None, stage="Reading keyframes"):
     crop_width, crop_height, _, _ = crop
     if crop_width < 2 or crop_height < 2:
         raise ValueError(f"crop is too small for {video_path}")
@@ -746,9 +1022,9 @@ def read_rawvideo_crop(command, crop, video_path, progress=None, keyframe_count=
         frames.append(data)
         frame_number = len(frames)
         if progress is not None and frame_number % INDEX_PROGRESS_STRIDE == 0:
-            progress(index_progress_message(frame_number, keyframe_count))
+            progress(index_progress_message(frame_number, keyframe_count, stage))
     if progress is not None and frames and len(frames) % INDEX_PROGRESS_STRIDE != 0:
-        progress(index_progress_message(len(frames), keyframe_count))
+        progress(index_progress_message(len(frames), keyframe_count, stage))
     stderr_thread.join()
     return_code = process.wait()
     stderr_text = b"".join(stderr_lines).decode("utf-8", errors="replace")
@@ -856,15 +1132,19 @@ def read_hud_keyframe_samples(
     )
     digit_samples = []
     timer_samples = []
+    race_samples = []
     for index, data in enumerate(raw_frames):
         frame = np.frombuffer(data, dtype=np.uint8).reshape((stacked_height, stacked_width, 3))
         lap, timer = split_hud_frame(frame, lap_crop, timer_crop)
-        digit = classify_lap_image(np.ascontiguousarray(lap), letter_box, digit_box)
+        lap_image = np.ascontiguousarray(lap)
+        digit = classify_lap_image(lap_image, letter_box, digit_box)
+        gray_lap = cv2.cvtColor(lap_image, cv2.COLOR_BGR2GRAY)
         state = timer_glyph_state(cv2.cvtColor(np.ascontiguousarray(timer), cv2.COLOR_BGR2GRAY))
         digit_samples.append((pts_times[index], digit))
         timer_samples.append((pts_times[index], state))
+        race_samples.append((pts_times[index], read_race_counter(gray_lap)))
         raw_frames[index] = None
-    return digit_samples, timer_samples
+    return digit_samples, timer_samples, race_samples
 
 
 def timer_states_from_raw(raw_frames, crop):
@@ -951,7 +1231,7 @@ def official_hot_lap_label(video_path, crop, end_seconds, video_ms, tesseract_pa
     return choose_official_hot_lap_time(texts, video_ms)
 
 
-def with_overlay_hot_lap_times(video_path, entries, spans, crop):
+def with_overlay_hot_lap_times(video_path, entries, spans, crop, progress=None):
     tesseract_path = shutil.which("tesseract")
     if tesseract_path is None or not spans:
         return entries
@@ -964,7 +1244,7 @@ def with_overlay_hot_lap_times(video_path, entries, spans, crop):
     ]
     labels = {
         start: label
-        for start, label in map_refinements(jobs, None)
+        for start, label in map_refinements(jobs, progress, "Reading lap times")
         if label is not None
     }
     return [(labels.get(start, label), start) for label, start in entries]
@@ -989,7 +1269,7 @@ def kept_times(starts, duration):
     return kept
 
 
-def map_refinements(jobs, progress):
+def map_refinements(jobs, progress, stage="Finding lap changes"):
     job_count = len(jobs)
     if job_count == 0:
         return []
@@ -1002,7 +1282,7 @@ def map_refinements(jobs, progress):
         with done_lock:
             done_count += 1
             if progress is not None:
-                progress(index_progress_message(done_count, job_count))
+                progress(index_progress_message(done_count, job_count, stage))
         return result
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=LAP_REFINE_WORKERS) as executor:
@@ -1010,22 +1290,661 @@ def map_refinements(jobs, progress):
         return [future.result() for future in futures]
 
 
+def counter_crop_for_frame(frame_width, frame_height):
+    x = scale_reference_px(RACE_COUNTER_X, frame_width, REFERENCE_FRAME_WIDTH)
+    y = scale_reference_px(RACE_COUNTER_Y, frame_height, REFERENCE_FRAME_HEIGHT)
+    width = even_length(scale_reference_px(RACE_COUNTER_WIDTH, frame_width, REFERENCE_FRAME_WIDTH))
+    height = even_length(scale_reference_px(RACE_COUNTER_HEIGHT, frame_height, REFERENCE_FRAME_HEIGHT))
+    return width, height, x, y
+
+
+def quali_boxes_in_counter_crop(frame_width, frame_height):
+    _width, _height, origin_x, origin_y = counter_crop_for_frame(frame_width, frame_height)
+    lap_x = scale_reference_px(LAP_CROP_X, frame_width, REFERENCE_FRAME_WIDTH)
+    lap_y = scale_reference_px(LAP_CROP_Y, frame_height, REFERENCE_FRAME_HEIGHT)
+
+    def box(x, y, width, height):
+        return (
+            lap_x + scale_reference_px(x, frame_width, REFERENCE_FRAME_WIDTH) - origin_x,
+            lap_y + scale_reference_px(y, frame_height, REFERENCE_FRAME_HEIGHT) - origin_y,
+            scale_reference_px(width, frame_width, REFERENCE_FRAME_WIDTH),
+            scale_reference_px(height, frame_height, REFERENCE_FRAME_HEIGHT),
+        )
+
+    letter_box = box(LAP_LETTER_X, LAP_LETTER_Y, LAP_LETTER_WIDTH, LAP_LETTER_HEIGHT)
+    digit_box = box(LAP_DIGIT_X, LAP_DIGIT_Y, LAP_DIGIT_WIDTH, LAP_DIGIT_HEIGHT)
+    if letter_box[0] < 0 or digit_box[0] < 0:
+        raise ValueError("race counter crop does not cover the qualifying lap label")
+    return letter_box, digit_box
+
+
+def race_digit_template(digit):
+    return RACE_DIGIT_TEMPLATES[digit]
+
+
+def race_digit_canvas(patch):
+    height, width = patch.shape
+    canvas = np.zeros((RACE_DIGIT_CANVAS_HEIGHT, RACE_DIGIT_CANVAS_WIDTH), dtype=bool)
+    y0 = max(0, (RACE_DIGIT_CANVAS_HEIGHT - height) // 2)
+    x0 = max(0, (RACE_DIGIT_CANVAS_WIDTH - width) // 2)
+    copy_height = min(height, RACE_DIGIT_CANVAS_HEIGHT)
+    copy_width = min(width, RACE_DIGIT_CANVAS_WIDTH)
+    canvas[y0:y0 + copy_height, x0:x0 + copy_width] = patch[:copy_height, :copy_width]
+    return canvas
+
+
+def match_race_digit(canvas):
+    best_digit = None
+    best_distance = RACE_DIGIT_CANVAS_HEIGHT * RACE_DIGIT_CANVAS_WIDTH
+    second_distance = best_distance
+    for digit, template in RACE_DIGIT_TEMPLATES.items():
+        distance = int(np.count_nonzero(canvas != template))
+        if distance < best_distance:
+            second_distance = best_distance
+            best_distance = distance
+            best_digit = digit
+        elif distance < second_distance:
+            second_distance = distance
+    is_close = best_distance <= RACE_DIGIT_MATCH_MAX_DISTANCE
+    has_margin = second_distance >= best_distance + RACE_DIGIT_MATCH_MARGIN
+    if is_close and has_margin:
+        return best_digit
+    return None
+
+
+def race_components(gray):
+    ink = (gray > RACE_INK_THRESHOLD).astype(np.uint8)
+    count, _labels, stats, _centroids = cv2.connectedComponentsWithStats(ink, 8)
+    components = []
+    image_height, image_width = gray.shape
+    for index in range(1, count):
+        x, y, width, height, area = (int(value) for value in stats[index])
+        touches_border = (
+            x <= 0 or y <= 0 or x + width >= image_width or y + height >= image_height
+        )
+        if area < RACE_COMPONENT_MIN_AREA or touches_border:
+            continue
+        patch = gray[y:y + height, x:x + width] > RACE_INK_THRESHOLD
+        components.append((x, y, width, height, area, patch))
+    return components
+
+
+def is_race_lap_glyph(component):
+    _x, _y, width, height, _area, _patch = component
+    return (
+        height >= RACE_DIGIT_MIN_HEIGHT
+        and RACE_DIGIT_MIN_WIDTH <= width <= RACE_DIGIT_MAX_WIDTH
+    )
+
+
+def race_digit_groups(digits):
+    groups = []
+    current = []
+    for digit in sorted(digits, key=lambda item: item[0]):
+        if not current:
+            current.append(digit)
+            continue
+        previous = current[-1]
+        gap = digit[0] - (previous[0] + previous[2])
+        if 0 <= gap <= RACE_DIGIT_GAP_MAX and len(current) < 2:
+            current.append(digit)
+            continue
+        groups.append(current)
+        current = [digit]
+    if current:
+        groups.append(current)
+    return groups
+
+
+def has_race_total(gray, group):
+    right = group[-1][0] + group[-1][2]
+    slash = gray[:, right + 1:right + 1 + RACE_SLASH_ZONE_WIDTH]
+    if slash.size == 0:
+        return False
+    slash_ink = int(np.count_nonzero(slash > RACE_INK_THRESHOLD))
+    if slash_ink < RACE_SLASH_INK_MIN or slash_ink > RACE_SLASH_INK_MAX:
+        return False
+    total_start = right + 1 + RACE_SLASH_ZONE_WIDTH
+    total = gray[:, total_start:total_start + RACE_TOTAL_LOOKAHEAD]
+    if total.size == 0:
+        return False
+    return int(np.count_nonzero(total > RACE_INK_THRESHOLD)) >= RACE_TOTAL_INK_MIN
+
+
+def race_lap_number_from_digits(digits):
+    matched = []
+    for _x, _y, _width, _height, _area, patch in digits:
+        digit = match_race_digit(race_digit_canvas(patch))
+        if digit is None:
+            return None
+        matched.append(digit)
+    if len(matched) == 1:
+        number = matched[0]
+    else:
+        number = matched[0] * 10 + matched[1]
+    if number <= 0 or number > RACE_LAP_NUMBER_MAX:
+        return None
+    return number
+
+
+def read_race_lap_number(gray, components):
+    digits = [component for component in components if is_race_lap_glyph(component)]
+    groups = race_digit_groups(digits)
+    groups.sort(key=len, reverse=True)
+    for group in groups:
+        if not has_race_total(gray, group):
+            continue
+        number = race_lap_number_from_digits(group)
+        if number is not None:
+            return number
+    return None
+
+
+def is_formation_banner(gray):
+    ink = gray > RACE_INK_THRESHOLD
+    count = int(np.count_nonzero(ink))
+    if count < RACE_FORMATION_INK_MIN or count > RACE_FORMATION_INK_MAX:
+        return False
+    rows, columns = np.where(ink)
+    if len(columns) == 0:
+        return False
+    width = int(columns.max() - columns.min() + 1)
+    height = int(rows.max() - rows.min() + 1)
+    has_banner_shape = (
+        width >= RACE_FORMATION_MIN_WIDTH
+        and RACE_FORMATION_MIN_HEIGHT <= height <= RACE_FORMATION_MAX_HEIGHT
+    )
+    return has_banner_shape
+
+
+def read_race_counter(gray):
+    """Return ("lap", number), ("formation",), or None for one counter crop."""
+    if gray.ndim != 2:
+        raise ValueError("race counter expects a grayscale crop")
+    components = race_components(gray)
+    number = read_race_lap_number(gray, components)
+    if number is not None:
+        return (RACE_LAP_KIND, number)
+    if is_formation_banner(gray):
+        return (RACE_FORMATION_KIND,)
+    return None
+
+
+def is_race_session(samples):
+    lap_reads = 0
+    for _time_seconds, reading in samples:
+        if reading is not None and reading[0] == RACE_LAP_KIND:
+            lap_reads += 1
+    return lap_reads >= RACE_MIN_LAP_READS
+
+
+def race_reading_value(reading):
+    if reading is None:
+        return None
+    if reading[0] == RACE_FORMATION_KIND:
+        return RACE_FORMATION_KIND
+    return reading[1]
+
+
+def race_change_brackets(samples):
+    """Return spans that can contain a formation start or a new race lap."""
+    brackets = []
+    highest = 0
+    formation_seen = False
+    last_value_time = None
+    previous_time = None
+    for time_seconds, reading in samples:
+        value = race_reading_value(reading)
+        if value is None:
+            previous_time = time_seconds
+            continue
+        if value == RACE_FORMATION_KIND:
+            if not formation_seen and highest == 0:
+                if last_value_time is not None:
+                    start = last_value_time
+                elif previous_time is not None:
+                    start = previous_time
+                else:
+                    start = time_seconds
+                brackets.append((start, time_seconds, highest, formation_seen))
+                formation_seen = True
+            last_value_time = time_seconds
+            continue
+        if value > highest:
+            if last_value_time is not None:
+                start = last_value_time
+            elif previous_time is not None:
+                start = previous_time
+            else:
+                start = time_seconds
+            brackets.append((start, time_seconds, highest, formation_seen))
+            highest = value
+        if value >= highest:
+            last_value_time = time_seconds
+    return brackets
+
+
+def advancing_race_holds(frames, highest, formation_seen):
+    """Return the first held time of formation, then each new lap number."""
+    events = []
+    run_value = None
+    run_length = 0
+    run_start = None
+    for time_seconds, reading in frames:
+        value = race_reading_value(reading)
+        if value != run_value:
+            run_value = value
+            run_length = 0
+            run_start = time_seconds
+        if value is None:
+            continue
+        run_length += 1
+        if run_length != LAP_DIGIT_HOLD_FRAMES:
+            continue
+        if value == RACE_FORMATION_KIND:
+            if not formation_seen and highest == 0:
+                events.append((run_start, RACE_FORMATION_KIND))
+                formation_seen = True
+            continue
+        if value > highest:
+            events.append((run_start, value))
+            highest = value
+    return events
+
+
+def merge_race_events(groups):
+    merged = []
+    highest = 0
+    formation_seen = False
+    for events in groups:
+        for time_seconds, kind in events:
+            if kind == RACE_FORMATION_KIND:
+                if not formation_seen and highest == 0:
+                    merged.append((time_seconds, kind))
+                    formation_seen = True
+                continue
+            if kind > highest:
+                merged.append((time_seconds, kind))
+                highest = kind
+    return merged
+
+
+def running_clock_time(frames):
+    """Return when a dashed clock becomes a running short clock and holds."""
+    seen_dashes = False
+    run_length = 0
+    run_start = None
+    for time_seconds, state in frames:
+        if state == "dashes":
+            seen_dashes = True
+            run_length = 0
+            continue
+        if not seen_dashes or state != "short":
+            run_length = 0
+            continue
+        if run_length == 0:
+            run_start = time_seconds
+        run_length += 1
+        if run_length == LAP_DIGIT_HOLD_FRAMES:
+            return run_start
+    return None
+
+
+def race_lights_out_time(video_path, counter_time, crop):
+    raw_frames, times = read_span_crop(
+        video_path, crop, counter_time, counter_time + RACE_LIGHTS_LOOKAHEAD_SECONDS,
+    )
+    states = timer_states_from_raw(raw_frames, crop)
+    return running_clock_time(zip(times, states, strict=True))
+
+
+def default_mask_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "mask.png")
+
+
+def load_red_mask(frame_width, frame_height, mask_path, penalty_radius_px=RED_NEARBY_PENALTY_RADIUS_PX):
+    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    if mask is None:
+        return None, None
+    resized_mask = cv2.resize(mask, (frame_width, frame_height), interpolation=cv2.INTER_NEAREST)
+    _, binary_mask = cv2.threshold(resized_mask, 127, 255, cv2.THRESH_BINARY)
+    mask_pixels = binary_mask > 0
+    if not np.any(mask_pixels):
+        return None, None
+    kernel_size = max(3, (2 * penalty_radius_px) + 1)
+    penalty_kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+    dilated_mask = cv2.dilate(binary_mask, penalty_kernel, iterations=1) > 0
+    nearby_pixels = np.logical_and(dilated_mask, np.logical_not(mask_pixels))
+    if not np.any(nearby_pixels):
+        nearby_pixels = None
+    return mask_pixels, nearby_pixels
+
+
+def red_frame_score(frame, mask_pixels, nearby_pixels, penalty_weight=RED_NEARBY_PENALTY_WEIGHT):
+    if mask_pixels is None or not np.any(mask_pixels):
+        return -1.0
+    rgb_frame = frame.astype(np.float32) / 255.0
+    red_channel = rgb_frame[:, :, 2]
+    green_channel = rgb_frame[:, :, 1]
+    blue_channel = rgb_frame[:, :, 0]
+    distance_to_red = np.sqrt((1.0 - red_channel) ** 2 + green_channel ** 2 + blue_channel ** 2)
+    closeness_to_red = 1.0 - (distance_to_red / np.sqrt(3.0))
+    red_dominance = np.clip(red_channel - np.maximum(green_channel, blue_channel), 0.0, 1.0)
+    combined_score = (RED_SCORE_CLOSENESS_WEIGHT * closeness_to_red) + (RED_SCORE_DOMINANCE_WEIGHT * red_dominance)
+    in_mask_score = float(np.mean(combined_score[mask_pixels]))
+    nearby_penalty_score = 0.0
+    if nearby_pixels is not None and np.any(nearby_pixels):
+        nearby_penalty_score = float(np.mean(red_dominance[nearby_pixels]))
+    final_score = in_mask_score - (penalty_weight * nearby_penalty_score)
+    return float(np.clip(final_score, -1.0, 1.0))
+
+
+def is_significant_red_drop(score, peak_score):
+    return (
+        score <= peak_score * RED_DROP_RATIO
+        and (peak_score - score) >= RED_DROP_ABSOLUTE
+    )
+
+
+def red_light_drop(scores):
+    """Return (last lit index, first drop index) for scores that start at the peak.
+
+    The first drop index is None until the drop holds for RED_DROP_HOLD_FRAMES.
+    Without that hold, the last lit index stays on the peak.
+    """
+    if len(scores) < 2:
+        return 0, None
+    peak_score = scores[0]
+    last_lit = 0
+    drop_streak = 0
+    first_drop = None
+    for index, score in enumerate(scores[1:], start=1):
+        if is_significant_red_drop(score, peak_score):
+            if drop_streak == 0:
+                first_drop = index
+            drop_streak += 1
+            if drop_streak >= RED_DROP_HOLD_FRAMES:
+                return last_lit, first_drop
+            continue
+        drop_streak = 0
+        first_drop = None
+        last_lit = index
+    return 0, None
+
+
+def read_capture_frame(capture, frame_number):
+    capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+    read_ok, frame = capture.read()
+    if not read_ok:
+        return None
+    return frame
+
+
+def red_sample_frames(start_frame, end_frame, stride_frames):
+    if end_frame <= start_frame:
+        return []
+    frames = list(range(start_frame, end_frame, stride_frames))
+    last_frame = end_frame - 1
+    if frames and frames[-1] != last_frame:
+        frames.append(last_frame)
+    elif not frames:
+        frames.append(last_frame)
+    return frames
+
+
+def last_red_light_frame(video_path, start_seconds, end_seconds, mask_path, progress=None):
+    """Return the last frame index where the five start lights are still lit."""
+    capture = cv2.VideoCapture(video_path)
+    if not capture.isOpened():
+        raise ValueError(f"Cannot open video file: {video_path}")
+    try:
+        fps = capture.get(cv2.CAP_PROP_FPS)
+        frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        if fps <= 0 or total_frames <= 0:
+            return None
+        mask_pixels, nearby_pixels = load_red_mask(frame_width, frame_height, mask_path)
+        if mask_pixels is None:
+            return None
+        start_frame = min(total_frames, max(0, int(round(start_seconds * fps))))
+        end_frame = min(total_frames, max(start_frame + 1, int(round(end_seconds * fps))))
+        refine_end = min(
+            total_frames,
+            int(round((end_seconds + RED_LIGHT_REFINE_TAIL_SECONDS) * fps)),
+        )
+        stride_frames = max(1, int(round(fps * RED_SCAN_STRIDE_SECONDS)))
+        sample_frames = red_sample_frames(start_frame, end_frame, stride_frames)
+        if progress is not None and sample_frames:
+            progress(index_progress_message(0, len(sample_frames), "Finding the red lights"))
+        best_frame = start_frame
+        best_score = -1.0
+        for index, frame_number in enumerate(sample_frames, start=1):
+            frame = read_capture_frame(capture, frame_number)
+            if frame is None:
+                continue
+            score = red_frame_score(frame, mask_pixels, nearby_pixels)
+            if score > best_score:
+                best_score = score
+                best_frame = frame_number
+            if progress is not None and (index % 10 == 0 or index == len(sample_frames)):
+                progress(index_progress_message(index, len(sample_frames), "Finding the red lights"))
+        scores = [best_score]
+        frame_numbers = [best_frame]
+        walk_end = max(refine_end - (best_frame + 1), 1)
+        for offset, frame_number in enumerate(range(best_frame + 1, refine_end), start=1):
+            frame = read_capture_frame(capture, frame_number)
+            if frame is None:
+                continue
+            scores.append(red_frame_score(frame, mask_pixels, nearby_pixels))
+            frame_numbers.append(frame_number)
+            if progress is not None and (offset % 30 == 0 or frame_number == refine_end - 1):
+                progress(index_progress_message(offset, walk_end, "Checking the light drop"))
+            last_lit, first_drop = red_light_drop(scores)
+            if first_drop is not None:
+                return frame_numbers[last_lit], fps
+        return frame_numbers[0], fps
+    finally:
+        capture.release()
+
+
+def last_red_light_time(video_path, start_seconds, end_seconds, mask_path, progress=None):
+    found = last_red_light_frame(video_path, start_seconds, end_seconds, mask_path, progress)
+    if found is None:
+        return None
+    frame_number, fps = found
+    if fps <= 0:
+        return None
+    return frame_number / fps
+
+
+def shift_race_start_to_lights_out(video_path, events, timer_crop, mask_path=None, progress=None):
+    if mask_path is None:
+        mask_path = default_mask_path()
+    formation = None
+    for time_seconds, kind in events:
+        if kind == RACE_FORMATION_KIND:
+            formation = time_seconds
+            break
+    shifted = []
+    for time_seconds, kind in events:
+        if kind != 1:
+            shifted.append((time_seconds, kind))
+            continue
+        search_start = time_seconds
+        if formation is not None and formation < time_seconds:
+            search_start = formation
+        search_end = time_seconds + RACE_LIGHTS_LOOKAHEAD_SECONDS
+        red_time = last_red_light_time(video_path, search_start, search_end, mask_path, progress)
+        if red_time is not None and red_time > search_start:
+            time_seconds = red_time
+        else:
+            lights_out = race_lights_out_time(video_path, time_seconds, timer_crop)
+            if lights_out is not None and lights_out > time_seconds:
+                time_seconds = lights_out
+        shifted.append((time_seconds, kind))
+    return shifted
+
+
+def lights_search_window(events):
+    """Return (formation_time, lap_one_time) when both ends of the grid exist."""
+    formation_time = None
+    lap_one_time = None
+    for time_seconds, kind in events:
+        if kind == RACE_FORMATION_KIND and formation_time is None:
+            formation_time = time_seconds
+        elif kind == 1 and lap_one_time is None:
+            lap_one_time = time_seconds
+    if formation_time is None or lap_one_time is None:
+        return None
+    if lap_one_time <= formation_time:
+        return None
+    return formation_time, lap_one_time
+
+
+def race_lap_name(kind):
+    if kind == RACE_FORMATION_KIND:
+        return RACE_FORMATION_KIND
+    return f"lap {kind:>2}"
+
+
+def race_lap_rows(events):
+    """Return (name, lap time, start, end) for the formation lap and each race lap."""
+    rows = []
+    for index, (time_seconds, kind) in enumerate(events):
+        end = None
+        for later_time, later_kind in events[index + 1:]:
+            if later_kind != RACE_FORMATION_KIND:
+                end = later_time
+                break
+        if kind == RACE_FORMATION_KIND or end is None:
+            rows.append((race_lap_name(kind), "", time_seconds, end))
+            continue
+        duration_ms = int(round(end * 1000)) - int(round(time_seconds * 1000))
+        lap_time = format_clock_milliseconds(duration_ms) if duration_ms > 0 else ""
+        rows.append((race_lap_name(kind), lap_time, time_seconds, end))
+    return rows
+
+
+def colour_fastest_race_lap(line, lap_time, fastest_milliseconds):
+    if not lap_time or fastest_milliseconds is None:
+        return line
+    if lap_time_milliseconds(lap_time) != fastest_milliseconds:
+        return line
+    return f"{FASTEST_HOT_LAP_COLOUR}{line}{ANSI_RESET}"
+
+
+def format_race_lap_report(rows):
+    named = [(name, lap_time, start) for name, lap_time, start, _end in rows]
+    if not named:
+        return []
+    name_width = max(len(name) for name, _lap_time, _start in named)
+    time_width = LAP_TIME_COLUMN_MIN_WIDTH
+    minute_width = 0
+    seconds_width = 0
+    lap_milliseconds = []
+    for _name, lap_time, start_seconds in named:
+        time_width = max(time_width, len(lap_time))
+        minutes, _seconds, _milliseconds, seconds_text = _time_index_parts(start_seconds)
+        minute_width = max(minute_width, len(str(minutes)))
+        seconds_width = max(seconds_width, len(seconds_text))
+        if lap_time:
+            lap_milliseconds.append(lap_time_milliseconds(lap_time))
+    fastest = min(lap_milliseconds) if lap_milliseconds else None
+    gap = LAP_REPORT_COLUMN_GAP
+    lines = []
+    for name, lap_time, start_seconds in named:
+        line = (
+            f"{name:<{name_width}}{gap}{lap_time:<{time_width}}{gap}"
+            f"{format_time_index(start_seconds, minute_width, seconds_width)}"
+        )
+        lines.append(colour_fastest_race_lap(line, lap_time, fastest))
+    return lines
+
+
+def race_readings_from_raw(raw_frames, crop):
+    crop_width, crop_height, _, _ = crop
+    readings = []
+    for index, data in enumerate(raw_frames):
+        image = np.frombuffer(data, dtype=np.uint8).reshape((crop_height, crop_width, 3))
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        readings.append(read_race_counter(gray))
+        raw_frames[index] = None
+    return readings
+
+
+def refine_race_bracket(video_path, bracket, crop):
+    start, end, highest, formation_seen = bracket
+    if end < start:
+        return []
+    raw_frames, times = read_span_crop(
+        video_path, crop, start, end + RACE_REFINE_TAIL_SECONDS,
+    )
+    readings = race_readings_from_raw(raw_frames, crop)
+    return advancing_race_holds(zip(times, readings, strict=True), highest, formation_seen)
+
+
+def apply_official_race_times(video_path, rows, crop, progress=None):
+    spans = [
+        (start, end, int(round(end * 1000)) - int(round(start * 1000)))
+        for _name, lap_time, start, end in rows
+        if lap_time and end is not None
+    ]
+    if not spans:
+        return rows
+    labelled = with_overlay_hot_lap_times(
+        video_path,
+        [(lap_time, start) for _name, lap_time, start, _end in rows if _end is not None and lap_time],
+        spans,
+        crop,
+        progress,
+    )
+    official = {start: label for label, start in labelled}
+    updated = []
+    for name, lap_time, start, end in rows:
+        updated.append((name, official.get(start, lap_time), start, end))
+    return updated
+
+
+def index_race_from_samples(video_path, samples, crop, timer_crop, overlay_crop, duration, progress):
+    brackets = race_change_brackets(samples)
+    jobs = [
+        lambda bracket=bracket: refine_race_bracket(video_path, bracket, crop)
+        for bracket in brackets
+    ]
+    events = merge_race_events(map_refinements(jobs, progress, "Finding lap changes"))
+    events = shift_race_start_to_lights_out(video_path, events, timer_crop, progress=progress)
+    events = [
+        (time_seconds, kind)
+        for time_seconds, kind in events
+        if 0 <= time_seconds <= duration
+    ]
+    rows = race_lap_rows(events)
+    rows = apply_official_race_times(video_path, rows, overlay_crop, progress)
+    starts = [time_seconds for time_seconds, _kind in events]
+    return starts, format_race_lap_report(rows)
+
+
 def index_lap_session(video_path, progress=None):
-    """Return flying-lap starts and the console classification lines."""
+    """Return lap starts and the console classification lines.
+
+    A race recording is indexed from the current/total counter. Anything else
+    uses the qualifying lap digit.
+    """
     frame_width, frame_height, duration = probe_video_geometry(video_path)
-    lap_crop = lap_crop_for_frame(frame_width, frame_height)
+    counter_crop = counter_crop_for_frame(frame_width, frame_height)
     timer_crop = timer_crop_for_frame(frame_width, frame_height)
     overlay_crop = overlay_time_crop_for_frame(frame_width, frame_height)
-    letter_box = scale_reference_box(
-        LAP_LETTER_X, LAP_LETTER_Y, LAP_LETTER_WIDTH, LAP_LETTER_HEIGHT, frame_width, frame_height,
-    )
-    digit_box = scale_reference_box(
-        LAP_DIGIT_X, LAP_DIGIT_Y, LAP_DIGIT_WIDTH, LAP_DIGIT_HEIGHT, frame_width, frame_height,
-    )
+    letter_box, digit_box = quali_boxes_in_counter_crop(frame_width, frame_height)
     keyframe_count = count_keyframes(video_path)
-    digit_samples, timer_samples = read_hud_keyframe_samples(
-        video_path, lap_crop, timer_crop, letter_box, digit_box, progress, keyframe_count,
+    digit_samples, timer_samples, race_samples = read_hud_keyframe_samples(
+        video_path, counter_crop, timer_crop, letter_box, digit_box, progress, keyframe_count,
     )
+    if is_race_session(race_samples):
+        return index_race_from_samples(
+            video_path, race_samples, counter_crop, timer_crop, overlay_crop, duration, progress,
+        )
+    lap_crop = counter_crop
     flying_brackets = lap_brackets_from_digits(digit_samples)
     paired = [
         (time_seconds, digit, state)
@@ -1057,7 +1976,7 @@ def index_lap_session(video_path, progress=None):
     in_laps = kept_times(refined[flying_count + garage_count:], duration)
     entries = classify_finished_laps(flying_starts, garage_exits, in_laps)
     spans = hot_lap_spans(flying_starts, garage_exits, in_laps)
-    entries = with_overlay_hot_lap_times(video_path, entries, spans, overlay_crop)
+    entries = with_overlay_hot_lap_times(video_path, entries, spans, overlay_crop, progress)
     return flying_starts, format_lap_report(entries)
 
 
@@ -1082,8 +2001,6 @@ def print_lap_starts(video_path):
         raise SystemExit(1) from error
     elapsed = time.perf_counter() - started
     print_lap_report(report_lines)
-    for start in starts:
-        print(f"{start:.3f}")
     print(f"indexed {len(starts)} laps in {elapsed:.1f} s", file=sys.stderr)
 
 
@@ -1103,14 +2020,6 @@ class VideoFrameExtractor(tk.Tk):
         self.has_lap_index = False
         self.is_indexing_laps = False
         self.lap_index_queue = queue.Queue()
-        self.mask_pixels = None
-        self.mask_pixel_count = 0
-        self.nearby_penalty_pixels = None
-        self.nearby_penalty_pixel_count = 0
-        self.nearby_penalty_weight = 0.35
-        self.nearby_penalty_radius_px = 10
-        self.search_window_increment_seconds = 5 * 60
-        self.search_window_start_seconds = 0
 
         self.canvas = tk.Canvas(self)
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -1130,9 +2039,6 @@ class VideoFrameExtractor(tk.Tk):
         self.jump_entry = tk.Entry(control_frame)
         self.jump_entry.bind("<Return>", self.jump_to_frame)
         self.jump_entry.pack(side=tk.LEFT)
-
-        btn_auto_detect_red = tk.Button(control_frame, text="Auto Detect Red", command=self.auto_detect_red_frame)
-        btn_auto_detect_red.pack(side=tk.RIGHT)
 
         btn_save_frame = tk.Button(control_frame, text="Save Frame", command=self.save_frame)
         btn_save_frame.pack(side=tk.RIGHT)
@@ -1184,271 +2090,25 @@ class VideoFrameExtractor(tk.Tk):
         self.total_frames = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
         self.current_frame = 0
-        self.search_window_start_seconds = 0
-
-        frame_width = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.load_mask(frame_width, frame_height)
 
         # Set the width to 1280 pixels and calculate the height to maintain 16:9 aspect ratio
         self.width = 960
         self.height = int(self.width * 9 / 16)
 
-        self.geometry(f"{self.width}x{self.height + WINDOW_CONTROL_HEIGHT}")
+        window_width = self.width
+        window_height = self.height + WINDOW_CONTROL_HEIGHT
+        self.update_idletasks()
+        origin_x, origin_y = window_origin(
+            window_width,
+            window_height,
+            self.winfo_screenwidth(),
+            self.winfo_screenheight(),
+            os.getpid(),
+        )
+        self.geometry(f"{window_width}x{window_height}+{origin_x}+{origin_y}")
         self.canvas.config(width=self.width, height=self.height)
 
         self.show_frame()
-
-    def load_mask(self, frame_width, frame_height):
-        mask_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mask.png")
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-
-        if mask is None:
-            self.mask_pixels = None
-            self.mask_pixel_count = 0
-            self.nearby_penalty_pixels = None
-            self.nearby_penalty_pixel_count = 0
-            messagebox.showwarning("Mask Missing", f"Could not load mask file: {mask_path}")
-            return
-
-        resized_mask = cv2.resize(mask, (frame_width, frame_height), interpolation=cv2.INTER_NEAREST)
-        _, binary_mask = cv2.threshold(resized_mask, 127, 255, cv2.THRESH_BINARY)
-        self.mask_pixels = binary_mask > 0
-        self.mask_pixel_count = int(np.count_nonzero(self.mask_pixels))
-
-        kernel_size = max(3, (2 * self.nearby_penalty_radius_px) + 1)
-        penalty_kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
-        dilated_mask = cv2.dilate(binary_mask, penalty_kernel, iterations=1) > 0
-        self.nearby_penalty_pixels = np.logical_and(dilated_mask, np.logical_not(self.mask_pixels))
-        self.nearby_penalty_pixel_count = int(np.count_nonzero(self.nearby_penalty_pixels))
-
-        if self.nearby_penalty_pixel_count == 0:
-            self.nearby_penalty_pixels = None
-
-        if self.mask_pixel_count == 0:
-            self.mask_pixels = None
-            self.nearby_penalty_pixels = None
-            self.nearby_penalty_pixel_count = 0
-            messagebox.showwarning("Mask Invalid", "mask.png did not contain any white mask pixels after resizing.")
-
-    def calculate_red_score(self, frame):
-        if self.mask_pixels is None or self.mask_pixel_count == 0:
-            return -1.0
-
-        rgb_frame = frame.astype(np.float32) / 255.0
-        r_channel = rgb_frame[:, :, 2]
-        g_channel = rgb_frame[:, :, 1]
-        b_channel = rgb_frame[:, :, 0]
-
-        # Blend geometric closeness to pure red with red dominance to reduce false positives.
-        distance_to_red = np.sqrt((1.0 - r_channel) ** 2 + g_channel ** 2 + b_channel ** 2)
-        closeness_to_red = 1.0 - (distance_to_red / np.sqrt(3.0))
-        red_dominance = np.clip(r_channel - np.maximum(g_channel, b_channel), 0.0, 1.0)
-
-        combined_score = (0.4 * closeness_to_red) + (0.6 * red_dominance)
-        in_mask_score = float(np.mean(combined_score[self.mask_pixels]))
-
-        nearby_penalty_score = 0.0
-        if self.nearby_penalty_pixels is not None and self.nearby_penalty_pixel_count > 0:
-            # Penalize nearby red bleed outside the circles.
-            nearby_penalty_score = float(np.mean(red_dominance[self.nearby_penalty_pixels]))
-
-        final_score = in_mask_score - (self.nearby_penalty_weight * nearby_penalty_score)
-        return float(np.clip(final_score, -1.0, 1.0))
-
-    def find_frame_before_red_drop(self, start_frame, peak_score):
-        # Balanced defaults: require both relative and absolute drop to avoid noise-triggered detection.
-        drop_ratio_threshold = 0.70
-        drop_abs_threshold = 0.07
-        consecutive_drop_frames_required = 2
-
-        if self.vid_cap is None or start_frame >= self.total_frames - 1:
-            return start_frame, peak_score, start_frame, peak_score, False
-
-        last_stable_frame = start_frame
-        last_stable_score = peak_score
-        first_drop_frame = None
-        first_drop_score = None
-        drop_streak = 0
-
-        total_refine_frames = max(self.total_frames - (start_frame + 1), 1)
-
-        for offset, frame_number in enumerate(range(start_frame + 1, self.total_frames), start=1):
-            self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-            ret, frame = self.vid_cap.read()
-            if not ret:
-                continue
-
-            current_score = self.calculate_red_score(frame)
-            relative_threshold = peak_score * drop_ratio_threshold
-            is_significant_drop = (
-                current_score <= relative_threshold
-                and (peak_score - current_score) >= drop_abs_threshold
-            )
-
-            if is_significant_drop:
-                if drop_streak == 0:
-                    first_drop_frame = frame_number
-                    first_drop_score = current_score
-                drop_streak += 1
-            else:
-                drop_streak = 0
-                first_drop_frame = None
-                first_drop_score = None
-                last_stable_frame = frame_number
-                last_stable_score = current_score
-
-            if offset % max(int(self.fps), 1) == 0 or frame_number == self.total_frames - 1:
-                percent = (offset / total_refine_frames) * 100
-                refine_text = (
-                    f"Refining lights-out frame... {percent:05.2f}% "
-                    f"(score: {current_score:.4f}, threshold: {relative_threshold:.4f})"
-                )
-                self.status_label.config(text=refine_text)
-                self.update_idletasks()
-                print(refine_text, end="\r", flush=True)
-
-            if drop_streak >= consecutive_drop_frames_required and first_drop_frame is not None:
-                return last_stable_frame, last_stable_score, first_drop_frame, first_drop_score, True
-
-        return start_frame, peak_score, start_frame, peak_score, False
-
-    def auto_detect_red_frame(self):
-        if self.vid_cap is None:
-            return
-
-        if self.mask_pixels is None or self.mask_pixel_count == 0:
-            messagebox.showerror("Mask Error", "Cannot run detection without a valid mask.png.")
-            return
-
-        stride_seconds = 0.5
-        stride_frames = max(1, int(round(self.fps * stride_seconds)))
-
-        current_window_start_seconds = self.search_window_start_seconds
-        current_window_end_seconds = current_window_start_seconds + self.search_window_increment_seconds
-
-        if self.fps > 0:
-            start_frame = min(
-                self.total_frames,
-                max(0, int(round(current_window_start_seconds * self.fps))),
-            )
-            end_frame_exclusive = min(
-                self.total_frames,
-                max(1, int(round(current_window_end_seconds * self.fps))),
-            )
-        else:
-            start_frame = 0
-            end_frame_exclusive = self.total_frames
-
-        if start_frame >= self.total_frames or start_frame >= end_frame_exclusive:
-            messagebox.showinfo(
-                "Search Complete",
-                "No more 5-minute windows left in this video. Reload the video to restart from 0:00.",
-            )
-            return
-
-        window_start_minutes = current_window_start_seconds / 60.0
-        window_end_minutes = (end_frame_exclusive / self.fps) / 60.0 if self.fps > 0 else 0
-
-        self.status_label.config(
-            text=(
-                f"Scanning red lights in {window_start_minutes:.1f}-{window_end_minutes:.1f} min "
-                f"(every {stride_seconds:.1f}s)..."
-            )
-        )
-        self.update_idletasks()
-        print(
-            f"Scanning red lights in {window_start_minutes:.1f}-{window_end_minutes:.1f} min "
-            f"(every {stride_seconds:.1f}s)..."
-        )
-
-        best_frame_number = self.current_frame
-        best_score = -1.0
-        processed_samples = 0
-        printed_inline_progress = False
-
-        frame_indices = list(range(start_frame, end_frame_exclusive, stride_frames))
-        if end_frame_exclusive > start_frame and frame_indices and frame_indices[-1] != end_frame_exclusive - 1:
-            frame_indices.append(end_frame_exclusive - 1)
-
-        total_samples = len(frame_indices)
-
-        for sample_index, frame_number in enumerate(frame_indices, start=1):
-            self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-            ret, frame = self.vid_cap.read()
-            if not ret:
-                continue
-
-            score = self.calculate_red_score(frame)
-            if score > best_score:
-                best_score = score
-                best_frame_number = frame_number
-
-            processed_samples += 1
-
-            if sample_index % max(int(self.fps), 1) == 0 or sample_index == total_samples:
-                percent = (sample_index / max(total_samples, 1)) * 100
-                progress_text = (
-                    f"Scanning red lights in {window_start_minutes:.1f}-{window_end_minutes:.1f} min "
-                    f"(every {stride_seconds:.1f}s)... "
-                    f"{percent:05.2f}% (best score: {best_score:.4f})"
-                )
-                self.status_label.config(text=progress_text)
-                self.update_idletasks()
-                print(progress_text, end="\r", flush=True)
-                printed_inline_progress = True
-
-        if printed_inline_progress:
-            print()
-
-        if processed_samples == 0:
-            messagebox.showerror("Detection Error", "No frames were processed during auto detection.")
-            return
-
-        print("Refining detected peak to frame right before red lights disappear...")
-        pre_drop_frame, pre_drop_score, first_drop_frame, first_drop_score, drop_found = self.find_frame_before_red_drop(
-            best_frame_number,
-            best_score,
-        )
-        print()
-
-        self.current_frame = pre_drop_frame
-        self.show_frame()
-
-        selected_time_seconds = (self.current_frame / self.fps) if self.fps > 0 else 0.0
-
-        if drop_found:
-            pre_drop_time_seconds = (pre_drop_frame / self.fps) if self.fps > 0 else 0.0
-            first_drop_time_seconds = (first_drop_frame / self.fps) if self.fps > 0 else 0.0
-            final_text = (
-                f"Pre-drop frame: {pre_drop_frame} ({pre_drop_time_seconds:.4f}s) score {pre_drop_score:.4f} | "
-                f"First drop frame: {first_drop_frame} ({first_drop_time_seconds:.4f}s) score {first_drop_score:.4f}"
-            )
-        else:
-            final_text = (
-                f"Frame: {best_frame_number} (peak red) | Peak score: {best_score:.4f} | "
-                "No significant drop found ahead"
-            )
-
-        self.status_label.config(text=final_text)
-        print(final_text)
-        print(f"Selected frame/time: {self.current_frame} ({selected_time_seconds:.4f}s)")
-
-        self.search_window_start_seconds += self.search_window_increment_seconds
-        if self.fps > 0:
-            max_video_seconds = self.total_frames / self.fps
-            if self.search_window_start_seconds >= max_video_seconds:
-                print("Next search window: end of video reached")
-            else:
-                next_window_start_seconds = self.search_window_start_seconds
-                next_window_end_seconds = min(
-                    next_window_start_seconds + self.search_window_increment_seconds,
-                    max_video_seconds,
-                )
-                print(
-                    f"Next search window: {next_window_start_seconds / 60.0:.1f}-"
-                    f"{next_window_end_seconds / 60.0:.1f} min"
-                )
 
     def show_frame(self):
         if self.vid_cap is not None:
@@ -1599,6 +2259,8 @@ class VideoFrameExtractor(tk.Tk):
         self.show_frame()
 
     def on_resize(self, event):
+        if event.widget is not self:
+            return
         if self.vid_cap is not None and event.width > 1 and event.height > 1:
             # Maintain 16:9 aspect ratio
             new_width = event.width

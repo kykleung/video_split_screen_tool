@@ -20,9 +20,19 @@ python f1_search_frame.py keith.mp4 &
 
 Use the paths the user gave. Stop after the windows are up. The timestamp comes from the user narrowing down inside each window, not from the agent.
 
+## Lap index
+
+**Index laps** reads the top-left counter from keyframes, then decodes only the short span around each change.
+
+Qualifying is a single `LAP` digit. `0` is the out-lap. A step that holds is a flying-lap start. The top-right clock separates the out-lap, the hot laps, and the in-lap.
+
+A race counter reads `LAP current / total`. The formation lap is the banner `FORMATION LAP`. The banner becomes lap 1 on the grid. Lap 1 in the index is the last frame where the five red lights are still lit. Later steps are the start/finish crossings. The same button handles both. The status line names the step in progress: keyframes, lap changes, the red lights, then lap times. Race-counter crops and digit templates live next to the qualifying ones in `f1_search_frame.py`.
+
 ## Lights-out scoring
 
 `mask.png` sits at the repo root. The script scores red inside the mask (closeness to pure red blended with red dominance, minus a nearby-pixel penalty) and can walk forward to the last stable frame before the drop. The drop is 70% of the peak and at least 0.07, held for two frames. Change these thresholds only when editing this script, and update this skill in the same change.
+
+While indexing a race, the red-light scan runs from the formation lap through the grid, so a red transition before the race is outside the search. Lap 1 is that last lit frame.
 
 ## Done
 

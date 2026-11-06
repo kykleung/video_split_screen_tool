@@ -23,13 +23,15 @@ python f1_search_frame.py keith.mp4 &
 
 ### Lap starts
 
-In each search window, **Index laps** finds the flying-lap starts. **Prev lap start** and **Next lap start** jump to them. `--index-laps` prints the same times, one per line, and does not open the window:
+In each search window, **Index laps** finds the flying-lap starts. **Prev lap start** and **Next lap start** jump to them. `--index-laps` prints the lap table and does not open the window:
 
 ```bash
 python f1_search_frame.py jackey.mp4 --index-laps
 ```
 
-A lap start is the frame where the top-left `LAP` number goes up by one and holds. `0` is the out-lap (a slashed zero). `0` to `1` is the first flying lap. On the Imola qualifying recording the top-right timer restarts at 452.5 s while the tower stays on `LAP 3`, because the car is returning to the pits. That time is not a lap start. The terminal also prints each finished out lap, hot lap, and in lap.
+A qualifying lap start is the frame where the top-left `LAP` number goes up by one and holds. `0` is the out-lap (a slashed zero). `0` to `1` is the first flying lap. On the Imola qualifying recording the top-right timer restarts at 452.5 s while the tower stays on `LAP 3`, because the car is returning to the pits. That time is not a lap start. The terminal also prints each finished out lap, hot lap, and in lap.
+
+A race uses the same button. The counter reads `LAP 12 / 39`, and the formation lap is the banner `FORMATION LAP`. That banner becomes lap 1 as the car reaches the grid. Lap 1 in the table is the last frame where the five red lights are still lit. Later rows are the start/finish crossings. **Prev lap start** and **Next lap start** jump to those frames. The status line names each step: keyframes, lap changes, the red lights, then lap times.
 
 Indexing reads keyframes of that label, then decodes only the few seconds around each change. A full qualifying file finishes in a few seconds.
 

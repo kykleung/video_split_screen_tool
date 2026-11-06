@@ -355,3 +355,188 @@ def test_showinfo_pts_times_ignores_other_lines():
         "[Parsed_showinfo_1 @ 0x1] n:   1 pts_time:374.37",
     ])
     assert search.showinfo_pts_times(stderr) == [280.78, 374.37]
+
+
+def test_counter_crop_contains_the_qualifying_lap_label():
+    assert search.counter_crop_for_frame(1920, 1080) == (220, 28, 100, 128)
+    letter_box, digit_box = search.quali_boxes_in_counter_crop(1920, 1080)
+    assert letter_box == (65, 0, 52, 28)
+    assert digit_box == (116, 0, 24, 28)
+    crop_width, crop_height, _x, _y = search.counter_crop_for_frame(1920, 1080)
+    for box in (letter_box, digit_box):
+        x, y, width, height = box
+        assert x >= 0 and y >= 0
+        assert x + width <= crop_width
+        assert y + height <= crop_height
+
+
+def test_race_digit_templates_match_themselves_and_stay_apart():
+    for digit in range(10):
+        template = search.race_digit_template(digit)
+        assert template.shape == (search.RACE_DIGIT_CANVAS_HEIGHT, search.RACE_DIGIT_CANVAS_WIDTH)
+        assert search.match_race_digit(template) == digit
+    closest = 999
+    for left in range(10):
+        for right in range(left + 1, 10):
+            distance = search.lap_digit_distance(
+                search.race_digit_template(left), search.race_digit_template(right),
+            )
+            closest = min(closest, distance)
+    assert closest >= search.RACE_DIGIT_MATCH_MARGIN
+
+
+def tight_race_glyph(digit):
+    template = search.race_digit_template(digit)
+    rows, columns = np.where(template)
+    return template[rows.min():rows.max() + 1, columns.min():columns.max() + 1]
+
+
+def paint_glyph(image, glyph, x, y):
+    height, width = glyph.shape
+    image[y:y + height, x:x + width][glyph] = 255
+
+
+def race_counter_image(digits):
+    image = np.zeros((search.RACE_COUNTER_HEIGHT, search.RACE_COUNTER_WIDTH), dtype=np.uint8)
+    x = 40
+    y = 4
+    for digit in digits:
+        glyph = tight_race_glyph(digit)
+        paint_glyph(image, glyph, x, y)
+        x += glyph.shape[1] + 6
+    image[9:19, x:x + 2] = 255
+    image[10:20, x + 16:x + 32] = 255
+    return image
+
+
+def test_race_counter_reads_one_digit_and_two_digits():
+    assert search.read_race_counter(race_counter_image([1])) == ("lap", 1)
+    assert search.read_race_counter(race_counter_image([1, 2])) == ("lap", 12)
+    assert search.read_race_counter(race_counter_image([3, 9])) == ("lap", 39)
+
+
+def test_race_counter_ignores_a_digit_with_no_total():
+    image = np.zeros((search.RACE_COUNTER_HEIGHT, search.RACE_COUNTER_WIDTH), dtype=np.uint8)
+    paint_glyph(image, tight_race_glyph(1), 40, 4)
+    assert search.read_race_counter(image) is None
+
+
+def test_formation_banner_is_wide_lettering_without_a_lap_digit():
+    banner = np.zeros((search.RACE_COUNTER_HEIGHT, search.RACE_COUNTER_WIDTH), dtype=np.uint8)
+    for x in range(20, 180, 12):
+        banner[8:20, x:x + 3] = 255
+    assert search.read_race_counter(banner) == ("formation",)
+    assert search.read_race_counter(np.zeros_like(banner)) is None
+    short = np.zeros_like(banner)
+    short[8:20, 20:60] = 255
+    assert search.read_race_counter(short) is None
+
+
+def test_race_session_needs_several_lap_reads():
+    lap = ("lap", 4)
+    short = [(float(index), lap) for index in range(search.RACE_MIN_LAP_READS - 1)]
+    assert search.is_race_session(short) is False
+    assert search.is_race_session(short + [(20.0, lap)]) is True
+    formation_only = [(float(index), ("formation",)) for index in range(30)]
+    assert search.is_race_session(formation_only) is False
+
+
+def test_race_change_brackets_skip_replays_and_keep_the_formation_start():
+    samples = [
+        (1.0, None),
+        (10.0, ("formation",)),
+        (20.0, ("formation",)),
+        (30.0, ("lap", 1)),
+        (40.0, ("lap", 1)),
+        (50.0, ("lap", 2)),
+        (80.0, ("lap", 1)),
+        (90.0, ("lap", 3)),
+    ]
+    assert search.race_change_brackets(samples) == [
+        (1.0, 10.0, 0, False),
+        (20.0, 30.0, 0, True),
+        (40.0, 50.0, 1, True),
+        (50.0, 90.0, 2, True),
+    ]
+
+
+def test_advancing_race_holds_emit_formation_then_each_new_lap():
+    frames = [(0.1 * index, ("formation",)) for index in range(search.LAP_DIGIT_HOLD_FRAMES)]
+    frames.extend(
+        (1.0 + 0.1 * index, ("lap", 1)) for index in range(search.LAP_DIGIT_HOLD_FRAMES)
+    )
+    frames.append((2.0, ("lap", 2)))
+    assert search.advancing_race_holds(frames, 0, False) == [
+        (0.0, "formation"),
+        (1.0, 1),
+    ]
+
+
+def test_window_opens_inside_the_screen():
+    assert search.window_origin(960, 680, 1440, 900, 0) == (40, 48)
+    x, y = search.window_origin(960, 680, 1000, 700, 0)
+    assert 0 <= x <= 1000 - 960
+    assert y == 0
+    cascaded_x, cascaded_y = search.window_origin(960, 680, 1440, 900, search.WINDOW_CASCADE_SLOTS + 1)
+    assert cascaded_x == 40 + search.WINDOW_CASCADE_STEP
+    assert cascaded_y == 48 + search.WINDOW_CASCADE_STEP
+
+
+def test_index_progress_names_the_stage():
+    assert search.index_progress_message(3, 40, "Finding lap changes") == "Finding lap changes… 3/40"
+    assert search.index_progress_message(0, None, "Finding the red lights") == "Finding the red lights…"
+
+
+def test_red_light_drop_keeps_the_last_lit_frame():
+    peak = 0.75
+    still_lit = 0.74
+    dropped = 0.20
+    scores = [peak, still_lit, dropped, dropped]
+    assert search.is_significant_red_drop(still_lit, peak) is False
+    assert search.is_significant_red_drop(dropped, peak) is True
+    assert search.red_light_drop(scores) == (1, 2)
+    assert search.red_light_drop([peak, dropped, still_lit]) == (0, None)
+
+
+def test_lights_search_window_runs_from_the_formation_lap_to_lap_one():
+    events = [
+        (214.931, "formation"),
+        (355.705, 1),
+        (440.240, 2),
+    ]
+    assert search.lights_search_window(events) == (214.931, 355.705)
+    assert search.lights_search_window([(214.931, "formation")]) is None
+    assert search.lights_search_window([(355.705, 1)]) is None
+    assert search.lights_search_window([(400.0, "formation"), (355.705, 1)]) is None
+
+
+def test_running_clock_starts_after_the_grid_dashes():
+    frames = [(0.0, "dashes"), (0.1, "long")]
+    frames.extend((0.2 + index / 50, "short") for index in range(search.LAP_DIGIT_HOLD_FRAMES))
+    assert search.running_clock_time(frames) == 0.2
+    assert search.running_clock_time([(0.0, "short")] * search.LAP_DIGIT_HOLD_FRAMES) is None
+    frames = [(0.0, "dashes")]
+    frames.extend((0.1 + index / 50, "short") for index in range(search.LAP_DIGIT_HOLD_FRAMES - 1))
+    assert search.running_clock_time(frames) is None
+
+
+def test_race_lap_report_lines_up_the_formation_lap_and_colours_the_fastest():
+    rows = [
+        ("formation", "", 220.220, 352.352),
+        ("lap  1", "1:18.000", 352.352, 430.352),
+        ("lap  2", "1:16.000", 430.352, None),
+    ]
+    report = search.format_race_lap_report(rows)
+    visible_lines = [visible(line) for line in report]
+    assert visible_lines == [
+        "formation            3:40.220 (220.220)",
+        "lap  1     1:18.000  5:52.352 (352.352)",
+        "lap  2     1:16.000  7:10.352 (430.352)",
+    ]
+    assert (
+        visible_lines[0].index("3:40.220 (220.220)")
+        == visible_lines[1].index("5:52.352 (352.352)")
+        == visible_lines[2].index("7:10.352 (430.352)")
+    )
+    assert report[1] == visible(report[1])
+    assert report[2] == coloured(visible(report[2]))
